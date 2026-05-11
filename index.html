@@ -593,7 +593,7 @@ var DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyYMX11UjruGgm3NJ
 // ══════════════════════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════════════════════
-var gasUrl       = store('get','gas_url') || DEFAULT_GAS_URL;
+var gasUrl = DEFAULT_GAS_URL || store('get','gas_url');
 var loginCode    = '';
 var isAdmin      = false;
 var todayOrders  = [];
