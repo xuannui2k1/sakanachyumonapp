@@ -119,7 +119,7 @@ body{font-family:'Noto Sans JP',-apple-system,'Hiragino Sans',sans-serif;backgro
 }
 
 /* Content */
-.content{padding:14px;flex:1}
+.content{padding:14px;flex:1;max-width:600px;margin:0 auto;width:100%}
 
 /* ── NEW ORDER BANNER ── */
 .new-banner{
@@ -173,7 +173,63 @@ body{font-family:'Noto Sans JP',-apple-system,'Hiragino Sans',sans-serif;backgro
 .cp-store{font-size:11px;font-weight:700;color:#92400e}
 .cp-text{font-size:13px;color:#78350f}
 
-/* ── PRODUCT CARD ── */
+/* ── ADMIN COMMENT BANNER ── */
+.admin-comment-banner{
+  background:linear-gradient(135deg,#7f1d1d,#991b1b);
+  border-radius:14px;padding:16px 18px;margin-bottom:14px;
+  box-shadow:0 4px 20px rgba(127,29,29,0.35);
+  animation:slideDown .3s ease;position:relative
+}
+.acb-label{
+  display:flex;align-items:center;gap:7px;
+  font-size:11px;font-weight:900;color:rgba(255,255,255,0.7);
+  letter-spacing:1px;margin-bottom:8px
+}
+.acb-pulse{
+  width:8px;height:8px;border-radius:50%;background:#fca5a5;
+  animation:pulse 1.2s infinite
+}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.3)}}
+.acb-text{
+  font-size:15px;font-weight:700;color:white;line-height:1.5;
+  white-space:pre-wrap
+}
+.acb-time{font-size:10px;color:rgba(255,255,255,0.45);margin-top:8px}
+.acb-edit{
+  position:absolute;top:12px;right:12px;
+  background:rgba(255,255,255,0.15);border:none;color:white;
+  border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;
+  font-family:inherit;cursor:pointer
+}
+/* Partner-facing comment banner states */
+.cmt-strip{
+  border-radius:10px;padding:10px 14px;margin-bottom:12px;
+  display:flex;align-items:center;gap:10px;cursor:pointer;
+  transition:all .2s;user-select:none
+}
+.cmt-strip.unread{background:#fff1f1;border:1.5px solid #fca5a5}
+.cmt-strip.read{background:#f0fdf4;border:1.5px solid #86efac}
+.cmt-strip-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;animation:pulse 1.2s infinite}
+.cmt-strip.unread .cmt-strip-dot{background:#ef4444}
+.cmt-strip.read .cmt-strip-dot{background:#22c55e;animation:none}
+.cmt-strip-label{font-size:12px;font-weight:700;flex:1}
+.cmt-strip.unread .cmt-strip-label{color:#991b1b}
+.cmt-strip.read .cmt-strip-label{color:#166534}
+.cmt-strip-arrow{font-size:11px;color:#aaa;transition:transform .2s}
+.cmt-strip-arrow.open{transform:rotate(180deg)}
+.cmt-expanded{
+  background:#fff1f1;border:1.5px solid #fca5a5;border-top:none;
+  border-radius:0 0 10px 10px;padding:14px 16px;margin-top:-12px;margin-bottom:12px
+}
+.cmt-expanded-text{
+  font-size:14px;color:#7f1d1d;font-weight:600;
+  line-height:1.6;white-space:pre-wrap;margin-bottom:14px
+}
+.btn-cmt-read{
+  width:100%;padding:11px;background:var(--green);color:white;
+  border:none;border-radius:9px;font-size:13px;font-weight:700;
+  font-family:inherit;cursor:pointer
+}
 .product-card{
   background:white;border-radius:16px;
   border:2px solid var(--border);margin-bottom:12px;
@@ -193,29 +249,34 @@ body{font-family:'Noto Sans JP',-apple-system,'Hiragino Sans',sans-serif;backgro
   border-radius:20px;letter-spacing:.5px;margin-bottom:4px
 }
 .store-row{
-  padding:11px 16px;border-bottom:1px solid #f8fafc;
-  display:flex;justify-content:space-between;align-items:center;gap:10px
+  padding:14px 16px;border-bottom:1px solid #f1f5f9;
+  display:grid;grid-template-columns:70px 1fr auto;
+  align-items:center;gap:0
 }
 .store-row:last-child{border-bottom:none}
 /* Batch colors — subtle, 3 levels */
-.store-row.is-new-1{background:#fffbeb;border-left:3px solid #f59e0b;padding-left:13px}
-.store-row.is-new-2{background:#f0f9ff;border-left:3px solid #0ea5e9;padding-left:13px}
-.store-row.is-new-3{background:#f5f3ff;border-left:3px solid #8b5cf6;padding-left:13px}
+.store-row.is-new-1{background:#fffbeb;border-left:3px solid #f59e0b}
+.store-row.is-new-2{background:#f0f9ff;border-left:3px solid #0ea5e9}
+.store-row.is-new-3{background:#f5f3ff;border-left:3px solid #8b5cf6}
 .new-time{font-size:10px;color:#94a3b8;display:block;margin-top:2px}
-.store-code-block{display:flex;flex-direction:column;gap:2px;min-width:0}
-.store-code{
-  font-size:18px;font-weight:900;color:var(--navy);line-height:1
+.store-code-block{
+  display:flex;flex-direction:column;align-items:center;gap:1px;
+  padding-right:14px;border-right:2px solid #e8eef6;
+  text-align:center
 }
-.store-name-short{
-  font-size:11px;color:#94a3b8;font-weight:500;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+.store-code{font-size:24px;font-weight:900;color:var(--navy);line-height:1}
+.store-name-short{font-size:11px;color:#94a3b8;font-weight:500}
+.store-variant{font-size:10px;color:#b0bac4;margin-top:1px}
+.store-mid{
+  padding:0 14px;font-size:12px;color:#64748b;
+  text-align:center
 }
-.store-variant{
-  font-size:10px;color:#b0bac4;margin-top:1px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+.store-qty-block{
+  text-align:center;padding-left:14px;border-left:2px solid #e8eef6;
+  display:flex;flex-direction:column;align-items:center
 }
-.store-qty{font-size:16px;font-weight:900;color:var(--navy);text-align:right}
-.store-unit{font-size:11px;color:var(--gray);text-align:right}
+.store-qty{font-size:24px;font-weight:900;color:var(--navy)}
+.store-unit{font-size:12px;color:var(--gray)}
 
 /* ── EMPTY STATE ── */
 .empty{text-align:center;padding:60px 20px;color:var(--gray)}
@@ -400,8 +461,47 @@ body{font-family:'Noto Sans JP',-apple-system,'Hiragino Sans',sans-serif;backgro
   font-style:italic
 }
 .store-qty.cancelled{text-decoration:line-through;color:#aaa}
+/* ══════════════════════════════════════════════════════════════
+   仕入入力 TAB
+══════════════════════════════════════════════════════════════ */
+.s-fish-card{background:white;border-radius:14px;border:1.5px solid var(--border);margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow-sm)}
+.s-fish-card.has-filled{border-color:#81c784}
+.s-fish-header{display:flex;justify-content:space-between;align-items:center;padding:15px 16px;cursor:pointer;user-select:none}
+.s-fish-header:active{background:var(--gray-light)}
+.s-fish-name{font-size:16px;font-weight:700;color:var(--navy)}
+.s-fish-summary{font-size:12px;color:var(--gray);margin-top:3px}
+.s-fish-arrow{font-size:11px;color:#ccc;transition:transform .2s}
+.s-fish-arrow.open{transform:rotate(180deg);color:var(--navy)}
+.s-fish-body{display:none;border-top:1.5px solid #f4f6f9}
+.s-fish-body.open{display:block}
+.s-store-list{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.s-store-row{background:#fafbfd;border:1.5px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color .2s}
+.s-store-row.filled{border-color:#a5d6a7;background:#f9fdf9}
+.s-store-row.locked{background:#f1f8e9;border-color:#c5e1a5}
+.s-store-header{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;cursor:pointer;user-select:none}
+.s-store-header:active{background:#f0f4fa}
+.s-store-name-text{font-size:14px;font-weight:700;color:var(--navy)}
+.s-store-badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px}
+.badge-empty{background:#f0f0f0;color:#bbb}
+.badge-filled{background:#e8f5e9;color:#2e7d32}
+.s-input-area{display:none;border-top:1px solid var(--border);padding:14px;background:white}
+.s-input-area.open{display:block}
+.s-store-row.locked .s-input-area input{background:#f5f9f0;color:#777;pointer-events:none}
+.s-input-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px}
+.s-field{display:flex;flex-direction:column;gap:5px}
+.s-field label{font-size:10px;color:#aaa;font-weight:700;letter-spacing:.3px;text-transform:uppercase}
+.s-field input{padding:10px;border:1.5px solid var(--border);border-radius:10px;font-size:18px;font-family:inherit;width:100%;text-align:right;font-weight:600;color:var(--navy);background:#fafbfd;transition:border-color .2s}
+.s-field input:focus{outline:none;border-color:var(--navy);background:white}
+.s-btn-row{display:flex;gap:8px}
+.s-btn-lock{flex:1;padding:11px;background:var(--green);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer}
+.s-btn-lock:active{opacity:.85}
+.s-btn-unlock{padding:11px 16px;background:#fff3e0;color:#e65100;border:1.5px solid #ffcc80;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;display:none}
+.s-save-msg{text-align:center;font-size:12px;margin-top:8px;min-height:16px;font-weight:600}
+.s-save-msg.ok{color:var(--green)}
+.s-save-msg.err{color:var(--red)}
 .footer-link{text-align:center;padding:24px 0 32px}
 .footer-link a{font-size:11px;color:#ccc;cursor:pointer}
+
 </style>
 </head>
 <body>
@@ -450,6 +550,7 @@ body{font-family:'Noto Sans JP',-apple-system,'Hiragino Sans',sans-serif;backgro
   <div id="partner-view" style="display:none;flex-direction:column;flex:1">
     <div class="tab-bar">
       <button class="tab-item active" id="tab-today" onclick="switchTab('today')">📋 今日の注文</button>
+      <button class="tab-item" id="tab-shiire" onclick="switchTab('shiire')">💴 仕入入力</button>
       <button class="tab-item" id="tab-history" onclick="switchTab('history')">
         📅 履歴
         <span class="tab-badge" id="history-badge" style="display:none"></span>
@@ -465,6 +566,14 @@ body{font-family:'Noto Sans JP',-apple-system,'Hiragino Sans',sans-serif;backgro
         </div>
         <div id="orders-list"></div>
       </div>
+      <!-- Shiire panel -->
+      <div id="panel-shiire" style="display:none">
+        <div style="text-align:center;padding:60px 20px;color:var(--gray)">
+          <div style="font-size:48px;margin-bottom:14px">💴</div>
+          <p style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:8px">仕入入力</p>
+          <p style="font-size:13px">近日中に追加予定です</p>
+        </div>
+      </div>
       <!-- History panel -->
       <div id="panel-history" style="display:none">
         <div id="history-list"></div>
@@ -475,19 +584,30 @@ body{font-family:'Noto Sans JP',-apple-system,'Hiragino Sans',sans-serif;backgro
 
   <!-- ── ADMIN VIEW ── -->
   <div id="admin-view" style="display:none;flex-direction:column;flex:1">
+    <div class="tab-bar" id="admin-tab-bar" style="overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none"></div>
     <div class="content">
       <div id="admin-new-banner" style="display:none"></div>
-      <div class="admin-notice">⚠️ 編集はアプリ内のみ保存 — シートには反映されません</div>
-      <div class="admin-groups" id="admin-groups"></div>
-      <div class="admin-group-bar">
-        <div class="admin-group-label" id="admin-group-label">全グループ</div>
-        <button class="btn-add" onclick="addAdminRow()">＋ 追加</button>
-      </div>
+      <div id="admin-comment-area"></div>
+      <div style="font-size:11px;color:#94a3b8;text-align:center;padding:4px 0 10px">⚠️ 編集はアプリ内のみ保存</div>
       <div id="admin-list"></div>
     </div>
     <div class="footer-link"><a onclick="doLogout()">← 設定に戻る</a></div>
   </div>
 
+</div>
+
+<!-- Admin Group Comment Modal -->
+<div class="modal-overlay" id="cmt-modal">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <h3>📢 管理者コメント</h3>
+    <p id="cmt-modal-label" style="font-size:12px;color:var(--gray);margin-bottom:12px">─</p>
+    <textarea id="cmt-modal-text" placeholder="パートナーへのお知らせを入力...（空白にすると削除）" style="width:100%;padding:13px 15px;border:2px solid var(--border);border-radius:13px;font-size:14px;font-family:inherit;resize:none;height:120px;color:var(--navy);background:var(--gray-light);transition:border-color .2s;margin-bottom:14px"></textarea>
+    <div class="modal-btns">
+      <button class="modal-cancel" onclick="closeCmtModal()">キャンセル</button>
+      <button class="modal-save" onclick="saveCmtModal()">📢 投稿する</button>
+    </div>
+  </div>
 </div>
 
 <!-- URL Settings Modal (admin only) -->
@@ -603,6 +723,23 @@ var adminAdded   = [];
 var currentGroup = 'all';
 var noteTargetKey= '';
 var noteTargetIdx= -1;
+var groupComments= {}; // { code: { text, time } }
+
+// ══════════════════════════════════════════════════════════════
+// 仕入入力 CONSTANTS
+// ══════════════════════════════════════════════════════════════
+var SHIIRE_GAS_URL  = 'https://script.google.com/macros/s/AKfycbyYMX11UjruGgm3NJw9cJmPQ02n3vZOhAkX_WyCV7Uhsv65RbOAHGmvQH51PgxpIH8/exec';
+var SHIIRE_SHEET_ID = '1mXrNddkibkMpUBcof-vhPNTzahO3Y456Ejh6obNU9zw';
+var CODE_TO_PREFIX  = {
+  101:'丸）',102:'中）',103:'え）',104:'貴）',
+  105:'若）',106:'立）',107:'梅）',108:'フ）',
+  109:'食）',111:'板）'
+};
+var SHIIRE_GROUPED  = ['アナゴ','カツオ','イサキ'];
+var shiireData      = {};
+var shiireSheet     = '';
+var shiireLoaded    = false;
+var shiireTimers    = {};
 
 // ══════════════════════════════════════════════════════════════
 // INIT
@@ -659,19 +796,39 @@ function loadData() {
 
   var code    = isAdmin ? 'all' : loginCode;
   var dateStr = todayKey().replace('snap_','');
-  var ordersUrl  = gasUrl + '?action=getOrders&code=' + encodeURIComponent(code);
-  var deletedUrl = gasUrl + '?action=getDeleted&date=' + encodeURIComponent(dateStr);
+  var ordersUrl   = gasUrl + '?action=getOrders&code='        + encodeURIComponent(code);
+  var deletedUrl  = gasUrl + '?action=getDeleted&date='       + encodeURIComponent(dateStr);
+  var commentsUrl = gasUrl + '?action=getGroupComments&date=' + encodeURIComponent(dateStr);
 
   Promise.all([
     fetch(ordersUrl).then(function(r){ return r.json(); }),
-    fetch(deletedUrl).then(function(r){ return r.json(); }).catch(function(){ return { deleted:[] }; })
+    fetch(deletedUrl).then(function(r){ return r.json(); }).catch(function(){ return { deleted:[] }; }),
+    fetch(commentsUrl).then(function(r){ return r.json(); }).catch(function(){ return { comments:{} }; })
   ])
   .then(function(results){
     hideLoading();
     reloadBtn.classList.remove('spinning');
-    var json    = results[0];
-    var delJson = results[1];
+    var json     = results[0];
+    var delJson  = results[1];
+    var cmtJson  = results[2];
     if (!json.success) { showToast(json.error || 'エラーが発生しました','error'); return; }
+
+    groupComments = cmtJson.comments || {};
+
+    // デフォルトコメント（未設定の場合のみ自動セット）
+    var DEFAULT_COMMENTS = {
+      '102': 'いつもお世話になっております。\n本日、下記の商品についてはご準備不要です。\n・ホタテ\n・ホタルイカ\n・アカムツ\n担当者が直接お伺いし、その場にて数量・内容を確認・決定いたします。\nご不便をおかけしますが、何卒よろしくお願いいたします。'
+    };
+    var dateStr = todayKey().replace('snap_','');
+    Object.keys(DEFAULT_COMMENTS).forEach(function(code){
+      if (!groupComments[code]) {
+        var text = DEFAULT_COMMENTS[code];
+        fetch(gasUrl+'?action=setGroupComment&code='+encodeURIComponent(code)+'&text='+encodeURIComponent(text)+'&date='+encodeURIComponent(dateStr))
+          .then(function(){
+            groupComments[code] = { text: text, time: pad(new Date().getHours())+':'+pad(new Date().getMinutes()) };
+          }).catch(function(){});
+      }
+    });
 
     // Store deleted fingerprints (from GAS, shared across all devices)
     var deletedFps = {};
@@ -863,6 +1020,42 @@ function renderOrdersList() {
     return;
   }
 
+  // ── Admin comment banner for this group ──
+  var cmt = groupComments[loginCode];
+  var cmtHtml = '';
+  if (cmt && cmt.text) {
+    var readKey = 'cmt_read_'+todayKey()+'_'+loginCode;
+    var isRead  = store('get', readKey) === '1';
+    var expandKey = 'cmt_open_'+todayKey()+'_'+loginCode;
+    var isOpen  = store('get', expandKey) === '1';
+    if (isRead) {
+      cmtHtml =
+        '<div class="cmt-strip read" onclick="toggleCmtBanner()">'+
+        '  <span class="cmt-strip-dot"></span>'+
+        '  <span class="cmt-strip-label">✓ 管理者コメント確認済み</span>'+
+        '  <span class="cmt-strip-arrow'+(isOpen?' open':'')+'">▾</span>'+
+        '</div>'+
+        (isOpen ?
+          '<div class="cmt-expanded">'+
+          '<div class="cmt-expanded-text">'+esc(cmt.text)+'</div>'+
+          (cmt.time?'<div style="font-size:11px;color:#aaa">'+cmt.time+' 掲載</div>':'')+
+          '</div>' : '');
+    } else {
+      cmtHtml =
+        '<div class="cmt-strip unread" onclick="toggleCmtBanner()">'+
+        '  <span class="cmt-strip-dot"></span>'+
+        '  <span class="cmt-strip-label">📢 管理者からのお知らせ（未読）</span>'+
+        '  <span class="cmt-strip-arrow'+(isOpen?' open':'')+'">▾</span>'+
+        '</div>'+
+        (isOpen ?
+          '<div class="cmt-expanded">'+
+          '<div class="cmt-expanded-text">'+esc(cmt.text)+'</div>'+
+          (cmt.time?'<div style="font-size:11px;color:#aaa;margin-bottom:12px">'+cmt.time+' 掲載</div>':'<div style="margin-bottom:12px"></div>')+
+          '<button class="btn-cmt-read" onclick="markCmtRead(event)">✓ 確認しました</button>'+
+          '</div>' : '');
+    }
+  }
+
   // ── Comment panel ──
   var commentMap = {};
   todayOrders.forEach(function(o) {
@@ -913,7 +1106,7 @@ function renderOrdersList() {
     return buildProductCard(groups[key]);
   }).join('');
 
-  el.innerHTML = cpHtml + cardsHtml;
+  el.innerHTML = cmtHtml + cpHtml + cardsHtml;
 }
 
 function buildProductCard(group) {
@@ -929,15 +1122,15 @@ function buildProductCard(group) {
     var cancelMsg = cancelled
       ? '<div class="cancelled-msg">大変申し訳ございません。こちらの注文はキャンセルとなりました。</div>' : '';
     var shortName = getShortName(o.custCode);
-    var variantLabel = isVariant ? '<div class="store-variant">' + esc(o.itemName) + '</div>' : '';
     return [
       '<div class="store-row' + batchCls + '">',
       '  <div class="store-code-block">',
       '    <div class="store-code">' + esc(o.custCode) + '</div>',
       '    <div class="store-name-short">' + esc(shortName || o.custName) + '</div>',
-      variantLabel, timeBadge, cancelMsg,
+      timeBadge, cancelMsg,
       '  </div>',
-      '  <div style="text-align:right;flex-shrink:0">',
+      '  <div class="store-mid">' + (isVariant ? esc(o.itemName) : '') + '</div>',
+      '  <div class="store-qty-block">',
       '    <div class="store-qty' + (cancelled ? ' cancelled' : '') + '">' + fmtQty(o.qty) + '</div>',
       '    <div class="store-unit">' + esc(o.unit) + '</div>',
       '  </div>',
@@ -962,11 +1155,29 @@ function toggleCommentPanel(header) {
   arrow.classList.toggle('open', open);
 }
 
+function toggleCmtBanner() {
+  var expandKey = 'cmt_open_'+todayKey()+'_'+loginCode;
+  var isOpen = store('get', expandKey) === '1';
+  store('set', expandKey, isOpen ? '0' : '1');
+  renderOrdersList();
+}
+
+function markCmtRead(e) {
+  e.stopPropagation();
+  store('set', 'cmt_read_'+todayKey()+'_'+loginCode, '1');
+  store('set', 'cmt_open_'+todayKey()+'_'+loginCode, '0');
+  renderOrdersList();
+  showToast('確認済みにしました ✓','success');
+}
+
 function switchTab(tab) {
   document.getElementById('tab-today').classList.toggle('active',   tab==='today');
+  document.getElementById('tab-shiire').classList.toggle('active',  tab==='shiire');
   document.getElementById('tab-history').classList.toggle('active', tab==='history');
   document.getElementById('panel-today').style.display   = tab==='today'   ? 'block':'none';
+  document.getElementById('panel-shiire').style.display  = tab==='shiire'  ? 'block':'none';
   document.getElementById('panel-history').style.display = tab==='history' ? 'block':'none';
+  if (tab==='shiire' && !shiireLoaded) initShiireTab();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1054,9 +1265,8 @@ function toggleHistoryDay(header) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ADMIN VIEW — same product-grouped format as partner
+// ADMIN VIEW — shiire_app スタイル
 // ══════════════════════════════════════════════════════════════
-var adminEditTarget = null; // { key, isAdded, o }
 
 function renderAdmin(syncDate) {
   document.getElementById('header-title').textContent = '管理者画面';
@@ -1065,244 +1275,476 @@ function renderAdmin(syncDate) {
   document.getElementById('admin-view').style.display   = 'flex';
 
   adminEdits = JSON.parse(store('get','admin_edits_'+todayKey()) || '{}');
-  adminAdded = JSON.parse(store('get','admin_added_'+todayKey()) || '[]');
 
   renderNewBanner('admin-new-banner', true);
 
-  // Group tabs
+  // Build category tabs
   var groupSet = {};
   todayOrders.forEach(function(o){ if(o.itemCode) groupSet[String(o.itemCode)]=true; });
-  adminAdded.forEach(function(r){ if(r.itemCode && !r.deleted) groupSet[String(r.itemCode)]=true; });
   var groups = Object.keys(groupSet).map(Number).filter(Boolean).sort(function(a,b){return a-b;});
 
-  var tabsEl = document.getElementById('admin-groups');
-  tabsEl.innerHTML = ['all'].concat(groups).map(function(c){
-    var lbl = c==='all' ? '全て' : (CODE_LABELS[c]||'コード'+c);
-    return '<button class="agroup-btn'+(c==='all'?' active':'')+'" data-code="'+c+'" onclick="selectAdminGroup(\''+c+'\')">'+lbl+'</button>';
+  var tabBar = document.getElementById('admin-tab-bar');
+  tabBar.innerHTML = groups.concat(['ichiran']).map(function(c){
+    var lbl = c==='ichiran' ? '📋 一覧' : (CODE_LABELS[c]||'コード'+c);
+    var isFirst = (c === groups[0]);
+    return '<button class="tab-item'+(isFirst?' active':'')+'" data-code="'+c+'" onclick="selectAdminGroup(\''+c+'\')">'+lbl+'</button>';
   }).join('');
 
-  currentGroup = 'all';
+  currentGroup = groups[0] || 'ichiran';
   renderAdminList();
 }
 
 function selectAdminGroup(code) {
   currentGroup = code;
-  document.querySelectorAll('.agroup-btn').forEach(function(b){
-    b.classList.toggle('active', b.dataset.code === String(code));
+  document.querySelectorAll('#admin-tab-bar .tab-item').forEach(function(b){
+    b.classList.toggle('active', String(b.dataset.code)===String(code));
   });
-  renderAdminList();
+  if (code === 'ichiran') {
+    renderIchiran('');
+  } else {
+    renderAdminList();
+  }
 }
 
 function renderAdminList() {
   adminEdits = JSON.parse(store('get','admin_edits_'+todayKey()) || '{}');
-  adminAdded = JSON.parse(store('get','admin_added_'+todayKey()) || '[]');
+  var el   = document.getElementById('admin-list');
+  var cmtEl= document.getElementById('admin-comment-area');
 
-  // Build rows
-  var allRows = todayOrders.map(function(o, i){
-    var key  = orderKey(i, o);
+  // Comment banner per group
+  if (currentGroup !== 'all') {
+    var cmt = groupComments[String(currentGroup)] || {};
+    cmtEl.innerHTML =
+      '<div class="admin-comment-banner" style="margin-bottom:12px">' +
+      '<div class="acb-label"><span class="acb-pulse"></span>管理者コメント — ' + (CODE_LABELS[Number(currentGroup)]||'グループ'+currentGroup) + '</div>' +
+      '<div class="acb-text">' + (cmt.text ? esc(cmt.text) : '<span style="opacity:.4;font-size:13px">コメントなし</span>') + '</div>' +
+      (cmt.time ? '<div class="acb-time">'+cmt.time+' 掲載</div>' : '') +
+      '<button class="acb-edit" onclick="openCmtModal()">✏️ 編集</button>' +
+      '</div>';
+  } else { cmtEl.innerHTML = ''; }
+
+  var allRows = todayOrders.map(function(o,i){
+    var key  = orderKey(i,o);
     var edit = adminEdits[key] || {};
-    return {
-      key: key, i: i, isAdded: false,
-      o: o,
+    return { key:key, i:i, o:o,
       qty:     edit.qty     !== undefined ? edit.qty     : o.qty,
       unit:    edit.unit    !== undefined ? edit.unit    : o.unit,
       comment: edit.comment !== undefined ? edit.comment : (o.comment||''),
       deleted: !!edit.deleted
     };
   });
-  adminAdded.forEach(function(r, i){
-    allRows.push({
-      key:'added_'+i, i:-1, isAdded:true,
-      o:{ custCode:r.custCode||'?', custName:r.custName||'', itemCode:r.itemCode||'', itemName:r.itemName||'新規' },
-      qty:r.qty||'', unit:r.unit||'', comment:r.comment||'', deleted:!!r.deleted
-    });
-  });
 
-  // Filter by group
-  var rows = currentGroup === 'all' ? allRows
+  var rows = currentGroup==='all' ? allRows
     : allRows.filter(function(r){ return String(r.o.itemCode)===String(currentGroup); });
 
-  var lbl = currentGroup==='all' ? '全グループ' : (CODE_LABELS[Number(currentGroup)]||'コード'+currentGroup);
-  document.getElementById('admin-group-label').textContent = lbl + '（'+rows.filter(function(r){return !r.deleted;}).length+'件）';
-
-  var el = document.getElementById('admin-list');
-  if (rows.length === 0) {
-    el.innerHTML = '<div class="empty"><div class="eicon">📭</div><p>データなし</p></div>';
+  if (rows.length===0) {
+    el.innerHTML='<div class="empty"><div class="eicon">📭</div><p>データなし</p></div>';
     return;
   }
 
-  // Group by product (same as partner)
-  var groups = {}, groupOrder = [];
-  rows.filter(function(r){return !r.deleted;}).forEach(function(r){
-    var kw = getVariantKeyword(r.o.itemName);
-    var gk = kw || r.o.itemName;
-    if (!groups[gk]) { groups[gk] = { label: kw||r.o.itemName, rows:[] }; groupOrder.push(gk); }
-    groups[gk].rows.push(r);
+  var gmap={}, gorder=[];
+  rows.forEach(function(r){
+    var kw=getVariantKeyword(r.o.itemName), gk=kw||r.o.itemName;
+    if(!gmap[gk]){gmap[gk]={label:kw||r.o.itemName,rows:[]};gorder.push(gk);}
+    gmap[gk].rows.push(r);
   });
-  groupOrder.forEach(function(k){
-    groups[k].rows.sort(function(a,b){ return parseFloat(a.o.custCode)-parseFloat(b.o.custCode); });
+  gorder.forEach(function(k){
+    gmap[k].rows.sort(function(a,b){return parseFloat(a.o.custCode)-parseFloat(b.o.custCode);});
   });
 
-  // Deleted rows section
-  var deletedRows = rows.filter(function(r){return r.deleted;});
-  var deletedHtml = deletedRows.length === 0 ? '' :
-    '<div style="margin-top:12px"><div style="font-size:11px;color:#aaa;font-weight:700;padding:6px 0">🗑 削除済み</div>' +
-    deletedRows.map(function(r){
-      return '<div style="background:#fee2e2;border-radius:10px;padding:10px 14px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;opacity:.6">' +
-        '<div><div style="font-size:13px;font-weight:700;color:#991b1b">'+esc(r.o.itemName)+'</div>' +
-        '<div style="font-size:11px;color:#aaa">'+esc(r.o.custCode+' '+(getShortName(r.o.custCode)||r.o.custName))+'</div></div>' +
-        '<button class="btn-restore" onclick="restoreRow(\''+r.key+'\','+r.isAdded+')">↩</button>' +
-        '</div>';
-    }).join('') + '</div>';
-
-  el.innerHTML = groupOrder.map(function(k){
-    var g = groups[k];
-    var rowsHtml = g.rows.map(function(r){
-      var bInfo    = getBatchInfo(r.o);
-      var batchCls = bInfo ? ' is-new-'+bInfo.b : '';
-      var timeBadge= bInfo ? '<span class="new-time">'+bInfo.t+'</span>' : '';
-      var shortName= getShortName(r.o.custCode);
-      var editedMark = adminEdits[r.key] && !r.isAdded ? '<span style="font-size:10px;color:var(--sky)"> ✎</span>' : '';
-      return [
-        '<div class="store-row'+batchCls+'" style="cursor:pointer" onclick="openAdminEdit(\''+r.key+'\','+r.isAdded+')">',
-        '  <div class="store-code-block">',
-        '    <div class="store-code">'+esc(r.o.custCode)+editedMark+'</div>',
-        '    <div class="store-name-short">'+esc(shortName||r.o.custName)+'</div>',
-        timeBadge,
-        '  </div>',
-        '  <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">',
-        '    <div style="text-align:right">',
-        '      <div class="store-qty">'+fmtQty(r.qty)+'</div>',
-        '      <div class="store-unit">'+esc(r.unit)+'</div>',
-        '    </div>',
-        '    <div style="font-size:18px;color:#cbd5e1">›</div>',
-        '  </div>',
-        '</div>'
-      ].join('');
-    }).join('');
-    return [
-      '<div class="product-card">',
-      '  <div class="product-card-header">',
-      '    <div class="product-name">'+esc(g.label)+'</div>',
-      '  </div>',
-      rowsHtml,
-      '</div>'
-    ].join('');
-  }).join('') + deletedHtml;
+  el.innerHTML = gorder.map(function(k){
+    var g   = gmap[k];
+    var cid = 'afc_'+skStr(k);
+    var active  = g.rows.filter(function(r){return !r.deleted;});
+    var deleted = g.rows.filter(function(r){return r.deleted;});
+    var storeRows = active.map(function(r){return buildAdminStoreRow(r);}).join('');
+    var delRows   = deleted.map(function(r){return buildAdminDeletedRow(r);}).join('');
+    return '<div class="s-fish-card" id="'+cid+'">'+
+      '<div class="s-fish-header" onclick="toggleFC(\''+cid+'\')">'+
+      '<div><div class="s-fish-name">'+esc(g.label)+'</div>'+
+      '<div class="s-fish-summary">'+active.length+'店舗'+(deleted.length>0?' · '+deleted.length+'件削除済':'')+
+      (currentGroup==='all'?' · '+(CODE_LABELS[Number(g.rows[0].o.itemCode)]||''):'')+'</div></div>'+
+      '<span class="s-fish-arrow" id="arr_'+cid+'">▾</span></div>'+
+      '<div class="s-fish-body" id="body_'+cid+'">'+
+      '<div class="s-store-list">'+storeRows+delRows+'</div></div></div>';
+  }).join('');
 }
 
-function openAdminEdit(key, isAdded) {
-  adminEdits = JSON.parse(store('get','admin_edits_'+todayKey()) || '{}');
-  adminAdded = JSON.parse(store('get','admin_added_'+todayKey()) || '[]');
-
-  var r;
-  if (isAdded) {
-    var idx = parseInt(key.replace('added_',''));
-    var a = adminAdded[idx];
-    r = { key:key, isAdded:true, itemName:a.itemName, custName:a.custName,
-          qty:a.qty, unit:a.unit, comment:a.comment };
-  } else {
-    var parts = key.split('_');
-    var i = parseInt(parts[parts.length-3]); // rough parse
-    // Find by key
-    for (var j=0;j<todayOrders.length;j++){
-      if (orderKey(j, todayOrders[j]) === key) {
-        var o = todayOrders[j];
-        var edit = adminEdits[key] || {};
-        r = { key:key, isAdded:false,
-              itemName:o.itemName, custName:(getShortName(o.custCode)||o.custName),
-              qty:   edit.qty     !== undefined ? edit.qty     : o.qty,
-              unit:  edit.unit    !== undefined ? edit.unit    : o.unit,
-              comment:edit.comment!== undefined ? edit.comment : (o.comment||'') };
-        break;
-      }
+function openCmtModal() {
+  var cmt = groupComments[String(currentGroup)] || {};
+  document.getElementById('cmt-modal-label').textContent =
+    (CODE_LABELS[Number(currentGroup)] || 'グループ'+currentGroup) + ' へのコメント';
+  document.getElementById('cmt-modal-text').value = cmt.text || '';
+  document.getElementById('cmt-modal').classList.add('show');
+  setTimeout(function(){ document.getElementById('cmt-modal-text').focus(); }, 150);
+}
+function closeCmtModal() { document.getElementById('cmt-modal').classList.remove('show'); }
+function saveCmtModal() {
+  var text    = document.getElementById('cmt-modal-text').value.trim();
+  var dateStr = todayKey().replace('snap_','');
+  fetch(gasUrl + '?action=setGroupComment&code=' + encodeURIComponent(currentGroup)
+    + '&text=' + encodeURIComponent(text) + '&date=' + encodeURIComponent(dateStr))
+  .then(function(){
+    if (text) {
+      groupComments[String(currentGroup)] = { text: text, time: pad(new Date().getHours())+':'+pad(new Date().getMinutes()) };
+    } else {
+      delete groupComments[String(currentGroup)];
     }
-  }
-  if (!r) return;
-  adminEditTarget = { key:key, isAdded:isAdded };
-  document.getElementById('aedit-label').textContent = r.itemName + ' / ' + r.custName;
-  document.getElementById('aedit-qty').value  = fmtQty(r.qty);
-  document.getElementById('aedit-unit').value = r.unit;
-  document.getElementById('aedit-cmt').value  = r.comment || '';
-  document.getElementById('admin-edit-modal').classList.add('show');
+    closeCmtModal();
+    renderAdminList();
+    showToast(text ? 'コメントを保存しました':'コメントを削除しました', 'success');
+  }).catch(function(){ showToast('保存に失敗しました','error'); });
 }
 
-function closeAdminEdit() { document.getElementById('admin-edit-modal').classList.remove('show'); }
+function buildAdminStoreRow(r) {
+  var key  = r.key;
+  var sname= getShortName(r.o.custCode)||r.o.custName;
+  var bInfo= getBatchInfo(r.o);
+  var bCls = bInfo ? ' is-new-'+bInfo.b : '';
+  return '<div class="s-store-row'+bCls+'" id="arow_'+key+'">'+
+    '<div class="s-store-header" onclick="toggleASR(\''+key+'\')">'+
+    '<div>'+
+    '<div class="s-store-name-text">'+esc(r.o.custCode)+' '+esc(sname)+'</div>'+
+    '<div style="font-size:12px;color:#64748b;margin-top:2px">'+fmtQty(r.qty)+' '+esc(r.unit)+'</div>'+
+    (r.comment?'<div style="font-size:11px;color:#f59e0b;margin-top:2px">📌 '+esc(r.comment)+'</div>':'')+
+    (bInfo?'<div class="new-time">'+bInfo.t+'</div>':'')+
+    '</div>'+
+    '<span style="font-size:20px;color:#cbd5e1">›</span>'+
+    '</div>'+
+    '<div class="s-input-area" id="aarea_'+key+'">'+
+    '<div class="s-input-grid" style="grid-template-columns:1fr 1fr;margin-bottom:10px">'+
+    '<div class="s-field"><label>数量</label><input type="number" id="aqty_'+key+'" value="'+esc(fmtQty(r.qty))+'" inputmode="decimal"></div>'+
+    '<div class="s-field"><label>単位</label><input type="text" id="aunit_'+key+'" value="'+esc(r.unit)+'"></div>'+
+    '</div>'+
+    '<div class="s-field" style="margin-bottom:12px"><label>コメント</label>'+
+    '<input type="text" id="acmt_'+key+'" value="'+esc(r.comment)+'" placeholder="コメントを入力..." style="font-size:14px;padding:9px 11px"></div>'+
+    '<div class="s-btn-row">'+
+    '<button class="s-btn-lock" onclick="saveAdminRow(\''+key+'\')">💾 保存</button>'+
+    '<button class="s-btn-unlock" style="display:flex;background:#fee2e2;color:#dc2626;border-color:#fca5a5" onclick="deleteAdminRow(\''+key+'\')">🗑 削除</button>'+
+    '</div></div></div>';
+}
 
-function saveAdminEditModal() {
-  if (!adminEditTarget) return;
-  var key = adminEditTarget.key; var isAdded = adminEditTarget.isAdded;
-  var qty = document.getElementById('aedit-qty').value;
-  var unit= document.getElementById('aedit-unit').value;
-  var cmt = document.getElementById('aedit-cmt').value;
-  if (isAdded) {
-    var idx = parseInt(key.replace('added_',''));
-    adminAdded[idx].qty=qty; adminAdded[idx].unit=unit; adminAdded[idx].comment=cmt;
-    store('set','admin_added_'+todayKey(), JSON.stringify(adminAdded));
-  } else {
-    adminEdits = JSON.parse(store('get','admin_edits_'+todayKey()) || '{}');
-    if (!adminEdits[key]) adminEdits[key]={};
-    adminEdits[key].qty=qty; adminEdits[key].unit=unit; adminEdits[key].comment=cmt;
-    store('set','admin_edits_'+todayKey(), JSON.stringify(adminEdits));
-  }
-  closeAdminEdit();
-  renderAdminList();
+function buildAdminDeletedRow(r) {
+  var key  = r.key;
+  var sname= getShortName(r.o.custCode)||r.o.custName;
+  return '<div class="s-store-row" id="arow_'+key+'" style="opacity:.45;background:#fff5f5;border-color:#fca5a5">'+
+    '<div class="s-store-header">'+
+    '<div>'+
+    '<div class="s-store-name-text" style="text-decoration:line-through;color:#aaa">'+esc(r.o.custCode)+' '+esc(sname)+'</div>'+
+    '<div style="font-size:11px;color:#ef4444">キャンセル済</div>'+
+    '</div>'+
+    '<button class="btn-restore" onclick="restoreAdminRow(\''+key+'\')">↩ 復元</button>'+
+    '</div></div>';
+}
+
+function toggleASR(key){
+  var a=document.getElementById('aarea_'+key);
+  if(a) a.classList.toggle('open');
+}
+
+function saveAdminRow(key){
+  adminEdits=JSON.parse(store('get','admin_edits_'+todayKey())||'{}');
+  var qty =document.getElementById('aqty_'+key).value;
+  var unit=document.getElementById('aunit_'+key).value;
+  var cmt =document.getElementById('acmt_'+key).value;
+  if(!adminEdits[key]) adminEdits[key]={};
+  adminEdits[key].qty=qty; adminEdits[key].unit=unit; adminEdits[key].comment=cmt;
+  store('set','admin_edits_'+todayKey(), JSON.stringify(adminEdits));
   showToast('保存しました ✓','success');
+  renderAdminList();
 }
 
-function deleteRowModal() {
-  if (!adminEditTarget) return;
-  var key = adminEditTarget.key; var isAdded = adminEditTarget.isAdded;
-
-  // Mark in GAS (shared) — find fingerprint of this order
-  if (!isAdded) {
-    for (var j=0;j<todayOrders.length;j++){
-      if (orderKey(j, todayOrders[j]) === key) {
-        var fp = orderFingerprint(todayOrders[j]);
-        var dateStr = todayKey().replace('snap_','');
-        fetch(gasUrl + '?action=markDeleted&fp=' + encodeURIComponent(fp) + '&date=' + encodeURIComponent(dateStr))
-          .catch(function(){});
-        // Also update local cache immediately
-        var d = getGasDeleted(); d[fp]=true;
-        store('set','gas_deleted_'+todayKey(), JSON.stringify(d));
-        break;
-      }
+function deleteAdminRow(key){
+  adminEdits=JSON.parse(store('get','admin_edits_'+todayKey())||'{}');
+  if(!adminEdits[key]) adminEdits[key]={};
+  adminEdits[key].deleted=true;
+  store('set','admin_edits_'+todayKey(), JSON.stringify(adminEdits));
+  for(var j=0;j<todayOrders.length;j++){
+    if(orderKey(j,todayOrders[j])===key){
+      var fp=orderFingerprint(todayOrders[j]);
+      var ds=todayKey().replace('snap_','');
+      fetch(gasUrl+'?action=markDeleted&fp='+encodeURIComponent(fp)+'&date='+encodeURIComponent(ds)).catch(function(){});
+      var d=getGasDeleted(); d[fp]=true;
+      store('set','gas_deleted_'+todayKey(), JSON.stringify(d));
+      break;
     }
   }
-
-  adminEdits = JSON.parse(store('get','admin_edits_'+todayKey()) || '{}');
-  if (isAdded) {
-    adminAdded[parseInt(key.replace('added_',''))].deleted=true;
-    store('set','admin_added_'+todayKey(), JSON.stringify(adminAdded));
-  } else {
-    if (!adminEdits[key]) adminEdits[key]={};
-    adminEdits[key].deleted=true;
-    store('set','admin_edits_'+todayKey(), JSON.stringify(adminEdits));
-  }
-  closeAdminEdit();
-  renderAdminList();
   showToast('削除しました');
+  renderAdminList();
 }
 
-function restoreRow(key, isAdded) {
-  adminEdits = JSON.parse(store('get','admin_edits_'+todayKey()) || '{}');
-  if (isAdded) {
-    adminAdded[parseInt(key.replace('added_',''))].deleted=false;
-    store('set','admin_added_'+todayKey(), JSON.stringify(adminAdded));
-  } else {
-    if (adminEdits[key]) adminEdits[key].deleted=false;
-    store('set','admin_edits_'+todayKey(), JSON.stringify(adminEdits));
-  }
-  renderAdminList();
+function restoreAdminRow(key){
+  adminEdits=JSON.parse(store('get','admin_edits_'+todayKey())||'{}');
+  if(adminEdits[key]) adminEdits[key].deleted=false;
+  store('set','admin_edits_'+todayKey(), JSON.stringify(adminEdits));
   showToast('復元しました','success');
+  renderAdminList();
 }
 
-function addAdminRow() {
-  var code = currentGroup==='all' ? '' : String(currentGroup);
-  adminAdded.push({ custCode:'', custName:'', itemCode:code, itemName:'新規', qty:0, unit:'', comment:'', deleted:false });
-  store('set','admin_added_'+todayKey(), JSON.stringify(adminAdded));
-  renderAdminList();
-  showToast('行を追加しました','warn');
+function renderIchiran(searchTerm) {
+  var el   = document.getElementById('admin-list');
+  var cmtEl= document.getElementById('admin-comment-area');
+  cmtEl.innerHTML = '';
+
+  var kw = (searchTerm||'').trim().toLowerCase();
+
+  // Sort all orders by custCode ascending
+  var allSorted = todayOrders.slice().sort(function(a,b){
+    return parseFloat(a.custCode) - parseFloat(b.custCode);
+  });
+
+  var rows = allSorted.filter(function(o){
+    if (!kw) return true;
+    var sname = (getShortName(o.custCode)||o.custName||'').toLowerCase();
+    var iname = (o.itemName||'').toLowerCase();
+    var code  = String(o.custCode).toLowerCase();
+    return sname.indexOf(kw)!==-1 || iname.indexOf(kw)!==-1 || code.indexOf(kw)!==-1;
+  });
+
+  var searchHtml =
+    '<div style="background:white;border-radius:11px;border:1.5px solid var(--border);display:flex;align-items:center;gap:8px;padding:10px 14px;margin-bottom:14px;box-shadow:var(--shadow-sm)">'+
+    '<span style="font-size:16px">🔍</span>'+
+    '<input type="search" id="ichiran-search" value="'+esc(searchTerm||'')+'" placeholder="店舗名・商品名・コードで検索..." '+
+    'oninput="renderIchiran(this.value)" '+
+    'style="flex:1;border:none;outline:none;font-size:14px;font-family:inherit;color:var(--navy);background:transparent">'+
+    '</div>';
+
+  if (rows.length === 0) {
+    el.innerHTML = searchHtml + '<div class="empty"><div class="eicon">🔍</div><p>該当なし</p></div>';
+    return;
+  }
+
+  // Group by store (custCode)
+  var storeGroups = [], storeMap = {};
+  rows.forEach(function(o){
+    var k = String(o.custCode);
+    if (!storeMap[k]) {
+      storeMap[k] = { code: o.custCode, name: getShortName(o.custCode)||o.custName, items: [] };
+      storeGroups.push(storeMap[k]);
+    }
+    var adminEdit = (adminEdits||{})[orderKey(todayOrders.indexOf(o), o)] || {};
+    var qty  = adminEdit.qty  !== undefined ? adminEdit.qty  : o.qty;
+    var unit = adminEdit.unit !== undefined ? adminEdit.unit : o.unit;
+    var deleted = !!adminEdit.deleted || !!getGasDeleted()[orderFingerprint(o)];
+    var bInfo= getBatchInfo(o);
+    storeMap[k].items.push({ o:o, qty:qty, unit:unit, deleted:deleted, bInfo:bInfo });
+  });
+
+  var storeCards = storeGroups.map(function(sg){
+    var itemRows = sg.items.map(function(it){
+      var deleted = it.deleted;
+      var bInfo   = it.bInfo;
+      var leftBorder = bInfo ? 'border-left:3px solid '+(bInfo.b===1?'#f59e0b':bInfo.b===2?'#0ea5e9':'#8b5cf6')+';' : '';
+      var grpLbl = CODE_LABELS[Number(it.o.itemCode)]||('コード'+it.o.itemCode);
+      return '<div style="display:flex;justify-content:space-between;align-items:center;'+
+        'padding:10px 16px;border-bottom:1px solid #f8fafc;'+
+        (deleted?'opacity:.4;background:#fff5f5;':'background:white;')+leftBorder+'">'+
+        '<div style="flex:1;min-width:0">'+
+        '<div style="font-size:14px;font-weight:700;color:var(--navy)'+(deleted?';text-decoration:line-through;color:#aaa':'')+'">'
+        +esc(it.o.itemName)+'</div>'+
+        '<div style="font-size:11px;color:#94a3b8;margin-top:2px">'+esc(grpLbl)+
+        (it.o.comment?' · 📌'+esc(it.o.comment):'')+
+        (bInfo?' · <span style="color:'+(bInfo.b===1?'#f59e0b':bInfo.b===2?'#0ea5e9':'#8b5cf6')+'">'+bInfo.t+'</span>':'')+
+        (deleted?' · <span style="color:#ef4444">キャンセル</span>':'')+
+        '</div>'+
+        '</div>'+
+        '<div style="text-align:right;flex-shrink:0;margin-left:12px">'+
+        '<div style="font-size:20px;font-weight:900;color:var(--navy)'+(deleted?';text-decoration:line-through;color:#aaa':'')+'">'+fmtQty(it.qty)+'</div>'+
+        '<div style="font-size:12px;color:var(--gray)">'+esc(it.unit)+'</div>'+
+        '</div>'+
+        '</div>';
+    }).join('');
+
+    return '<div style="background:white;border-radius:14px;border:1.5px solid var(--border);margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow-sm)">'+
+      '<div style="background:var(--navy);padding:12px 16px;display:flex;align-items:center;gap:12px">'+
+      '<div style="font-size:26px;font-weight:900;color:white;line-height:1">'+esc(sg.code)+'</div>'+
+      '<div>'+
+      '<div style="font-size:14px;font-weight:700;color:white">'+esc(sg.name)+'</div>'+
+      '<div style="font-size:11px;color:rgba(255,255,255,0.5)">'+sg.items.length+'件</div>'+
+      '</div>'+
+      '</div>'+
+      itemRows+
+      '</div>';
+  }).join('');
+
+  el.innerHTML = searchHtml + storeCards +
+    '<div style="text-align:center;font-size:11px;color:#aaa;padding:8px">'+rows.length+'件 / '+storeGroups.length+'店舗</div>';
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// 仕入入力 FUNCTIONS
+// ══════════════════════════════════════════════════════════════
+function skStr(s){var r='';for(var i=0;i<s.length;i++){var c=s.charCodeAt(i);if((c>=65&&c<=90)||(c>=97&&c<=122)||(c>=48&&c<=57))r+=s[i];else r+='x'+c;}return r;}
+function sKey(fn,idx){return skStr(fn)+'_'+idx;}
+
+var SHIIRE_PRIORITY=['アナゴ','カツオ','タコ'];
+function getPriority(n){for(var i=0;i<SHIIRE_PRIORITY.length;i++){if(n.indexOf(SHIIRE_PRIORITY[i])!==-1)return i;}return SHIIRE_PRIORITY.length;}
+
+function initShiireTab(){
+  if(shiireLoaded) return;
+  var now=new Date();
+  shiireSheet='仕入表'+(now.getMonth()+1)+'/'+now.getDate();
+  loadShiireData();
+}
+
+function reloadShiire(){ shiireLoaded=false; initShiireTab(); }
+
+async function loadShiireData(){
+  showLoading('仕入データを読み込み中...');
+  try{
+    var url=SHIIRE_GAS_URL+'?action=readAll&sheetId='+encodeURIComponent(SHIIRE_SHEET_ID)+'&sheetName='+encodeURIComponent(shiireSheet);
+    var res=await fetch(url);
+    var json=await res.json();
+    if(json.error){showToast('エラー: '+json.error,'error');hideLoading();return;}
+    shiireData={};
+    (json.rows||[]).forEach(function(r){if(!shiireData[r.name])shiireData[r.name]=[];shiireData[r.name].push(r);});
+    shiireLoaded=true;
+    renderShiireList();
+  }catch(e){showToast('通信エラー: '+e.message,'error');}
+  hideLoading();
+}
+
+function renderShiireList(){
+  var prefix=isAdmin?null:(CODE_TO_PREFIX[Number(loginCode)]||null);
+  var el=document.getElementById('panel-shiire');
+  var hdr='<div style="background:white;border-radius:11px;padding:11px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border:1px solid var(--border);box-shadow:var(--shadow-sm)">'+
+    '<div><div style="font-size:13px;font-weight:700;color:var(--navy)">'+esc(shiireSheet)+'</div>'+
+    '<div style="font-size:11px;color:var(--gray)">本日の仕入入力</div></div>'+
+    '<button onclick="reloadShiire()" style="font-size:12px;color:var(--navy);background:#eef3fb;border:1px solid #c5d8f0;border-radius:8px;padding:7px 12px;font-family:inherit;font-weight:700;cursor:pointer">🔄 再読込</button>'+
+  '</div>';
+  var names=Object.keys(shiireData).filter(function(n){return !prefix||n.startsWith(prefix);}).sort(function(a,b){
+    var kwa=null,kwb=null;
+    SHIIRE_GROUPED.forEach(function(kw){if(a.indexOf(kw)!==-1&&!kwa)kwa=kw;if(b.indexOf(kw)!==-1&&!kwb)kwb=kw;});
+    var pa=getPriority(kwa||a),pb=getPriority(kwb||b);
+    if(pa!==pb)return pa-pb;
+    return (kwa||a).localeCompare(kwb||b,'ja');
+  });
+  if(names.length===0){el.innerHTML=hdr+'<div class="empty"><div class="eicon">📋</div><p>データがありません</p></div>';return;}
+  var rendered={},cards=[];
+  names.forEach(function(fn){
+    var gkw=null;
+    SHIIRE_GROUPED.forEach(function(kw){if(fn.indexOf(kw)!==-1&&!gkw)gkw=kw;});
+    if(gkw){
+      var gk=(prefix||'all')+'_'+gkw;
+      if(!rendered[gk]){rendered[gk]=true;var vs=names.filter(function(n){return n.indexOf(gkw)!==-1;});cards.push(buildGrpCard(gkw,vs));}
+    }else{
+      if(!rendered[fn]){rendered[fn]=true;cards.push(buildFishCard(fn));}
+    }
+  });
+  el.innerHTML=hdr+cards.join('');
+}
+
+function buildFishCard(fn){
+  var stores=shiireData[fn]||[];
+  var filled=stores.filter(function(s){return s.qty!==''&&s.qty!==null;}).length;
+  var cid='fc_'+skStr(fn);
+  var rows=stores.map(function(s,i){return buildStoreRow(fn,i,s,false);}).join('');
+  return '<div class="s-fish-card'+(filled>0?' has-filled':'')+'" id="'+cid+'">'+
+    '<div class="s-fish-header" onclick="toggleFC(\''+cid+'\')">'+
+    '<div><div class="s-fish-name">'+esc(fn)+'</div><div class="s-fish-summary">'+stores.length+'店舗 · '+filled+'件入力済</div></div>'+
+    '<span class="s-fish-arrow" id="arr_'+cid+'">▾</span></div>'+
+    '<div class="s-fish-body" id="body_'+cid+'"><div class="s-store-list">'+rows+'</div></div></div>';
+}
+
+function buildGrpCard(kw,variants){
+  var all=[];
+  variants.forEach(function(vn){(shiireData[vn]||[]).forEach(function(s,i){all.push({s:s,fn:vn,idx:i});});});
+  all.sort(function(a,b){return Number(a.s.code)-Number(b.s.code);});
+  var filled=all.filter(function(si){return si.s.qty!==''&&si.s.qty!==null;}).length;
+  var cid='fc_grp_'+skStr(kw);
+  var rows=all.map(function(si){return buildStoreRow(si.fn,si.idx,si.s,true);}).join('');
+  return '<div class="s-fish-card'+(filled>0?' has-filled':'')+'" id="'+cid+'">'+
+    '<div class="s-fish-header" onclick="toggleFC(\''+cid+'\')">'+
+    '<div><div class="s-fish-name">'+esc(kw)+' <span style="font-size:12px;color:#94a3b8;font-weight:400">('+variants.length+'種)</span></div>'+
+    '<div class="s-fish-summary">'+all.length+'店舗 · '+filled+'件入力済</div></div>'+
+    '<span class="s-fish-arrow" id="arr_'+cid+'">▾</span></div>'+
+    '<div class="s-fish-body" id="body_'+cid+'"><div class="s-store-list">'+rows+'</div></div></div>';
+}
+
+function buildStoreRow(fn,idx,s,showVariant){
+  var key=sKey(fn,idx);
+  var filled=s.qty!==''&&s.qty!==null&&s.qty!==undefined;
+  var sname=NAME_MAP[Number(s.code)]||s.store;
+  var vtag=showVariant?'<span style="font-size:11px;color:#94a3b8;margin-left:4px">'+esc(s.name)+'</span>':'';
+  return '<div class="s-store-row'+(filled?' filled':'')+'" id="row_'+key+'">'+
+    '<div class="s-store-header" onclick="toggleSR(\''+key+'\')">'+
+    '<div><div class="s-store-name-text">'+esc(s.code)+' '+esc(sname)+vtag+'</div>'+
+    (s.unit?'<div style="font-size:11px;color:#94a3b8">'+esc(s.unit)+'</div>':'')+
+    '</div><span id="badge_'+key+'" class="s-store-badge '+(filled?'badge-filled':'badge-empty')+'">'+(filled?'✓ 入力済':'未入力')+'</span></div>'+
+    '<div class="s-input-area" id="area_'+key+'">'+
+    '<div class="s-input-grid" style="grid-template-columns:1fr 1fr 1fr">'+
+    '<div class="s-field"><label>数量 (F列)</label>'+
+    '<input type="number" id="f_'+key+'" value="'+esc(s.qty||'')+'" inputmode="decimal" oninput="schSave(\''+fn+'\','+idx+',\''+key+'\')"></div>'+
+    '<div class="s-field"><label>単価 (H列)</label>'+
+    '<input type="number" id="h_'+key+'" value="'+esc(s.price||'')+'" inputmode="decimal" placeholder="同じ価格はここへ" oninput="schSave(\''+fn+'\','+idx+',\''+key+'\')">'+
+    '<div style="font-size:10px;color:#aaa;margin-top:3px">全商品同価格の場合</div></div>'+
+    '<div class="s-field"><label>仕入単価 (I列)</label>'+
+    '<input type="number" id="i_'+key+'" value="'+esc(s.shiirePrice||'')+'" inputmode="decimal" placeholder="個別価格はここへ" oninput="schSave(\''+fn+'\','+idx+',\''+key+'\')">'+
+    '<div style="font-size:10px;color:#aaa;margin-top:3px">この商品のみ異なる場合</div></div>'+
+    '</div>'+
+    '<div class="s-btn-row">'+
+    '<button class="s-btn-lock" id="sbtn_'+key+'" onclick="sLock(\''+fn+'\','+idx+',\''+key+'\')">✓ 確認・ロック</button>'+
+    '<button class="s-btn-unlock" id="ubtn_'+key+'" onclick="sUnlock(\''+key+'\')">🔓 解除</button>'+
+    '</div><div class="s-save-msg" id="msg_'+key+'"></div></div></div>';
+}
+
+function toggleFC(cid){
+  var body=document.getElementById('body_'+cid);
+  var arr=document.getElementById('arr_'+cid);
+  var open=body.classList.toggle('open');
+  arr.classList.toggle('open',open);
+  if(open){
+    body.querySelectorAll('.s-input-area').forEach(function(a){a.classList.add('open');});
+  }
+}
+
+function toggleSR(key){
+  document.getElementById('area_'+key).classList.toggle('open');
+}
+
+function schSave(fn,idx,key){
+  clearTimeout(shiireTimers[key]);
+  shiireTimers[key]=setTimeout(function(){doSSave(fn,idx,key,false);},800);
+}
+
+async function doSSave(fn,idx,key,showMsg){
+  var s=shiireData[fn]&&shiireData[fn][idx];
+  if(!s)return;
+  var fv=document.getElementById('f_'+key).value||'';
+  var hv=document.getElementById('h_'+key).value||'';
+  var iv=document.getElementById('i_'+key).value||'';
+  try{
+    var res=await fetch(SHIIRE_GAS_URL,{method:'POST',body:JSON.stringify({action:'write',sheetId:SHIIRE_SHEET_ID,sheetName:shiireSheet,row:s.row,f:fv||null,h:hv||null,i:iv||null}),headers:{'Content-Type':'text/plain'}});
+    var json=await res.json();
+    if(json.success){
+      s.qty=fv; s.price=hv; s.shiirePrice=iv;
+      if(showMsg){
+        var m=document.getElementById('msg_'+key);if(m){m.textContent='✓ 保存しました';m.className='s-save-msg ok';}
+        var b=document.getElementById('badge_'+key);if(b){b.textContent='✓ 入力済';b.className='s-store-badge badge-filled';}
+        var r=document.getElementById('row_'+key);if(r)r.classList.add('filled');
+      }
+    }
+  }catch(e){if(showMsg){var m=document.getElementById('msg_'+key);if(m){m.textContent='通信エラー';m.className='s-save-msg err';}}}
+}
+
+async function sLock(fn,idx,key){
+  await doSSave(fn,idx,key,true);
+  var area=document.getElementById('area_'+key);
+  if(area)area.querySelectorAll('input').forEach(function(inp){inp.readOnly=true;inp.style.background='#f1f8e9';inp.style.color='#555';});
+  var r=document.getElementById('row_'+key);if(r)r.classList.add('locked');
+  var sb=document.getElementById('sbtn_'+key);if(sb)sb.style.display='none';
+  var ub=document.getElementById('ubtn_'+key);if(ub)ub.style.display='block';
+  showToast('ロックしました ✓','success');
+}
+
+function sUnlock(key){
+  var area=document.getElementById('area_'+key);
+  if(area)area.querySelectorAll('input').forEach(function(inp){inp.readOnly=false;inp.style.background='';inp.style.color='';});
+  var r=document.getElementById('row_'+key);if(r)r.classList.remove('locked');
+  var sb=document.getElementById('sbtn_'+key);if(sb)sb.style.display='';
+  var ub=document.getElementById('ubtn_'+key);if(ub)ub.style.display='none';
+  showToast('ロック解除しました');
 }
 
 // ══════════════════════════════════════════════════════════════
