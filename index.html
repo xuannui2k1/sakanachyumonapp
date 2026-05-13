@@ -551,10 +551,7 @@ body{font-family:'Noto Sans JP',-apple-system,'Hiragino Sans',sans-serif;backgro
     <div class="tab-bar">
       <button class="tab-item active" id="tab-today" onclick="switchTab('today')">📋 今日の注文</button>
       <button class="tab-item" id="tab-shiire" onclick="switchTab('shiire')">💴 仕入入力</button>
-      <button class="tab-item" id="tab-history" onclick="switchTab('history')">
-        📅 履歴
-        <span class="tab-badge" id="history-badge" style="display:none"></span>
-      </button>
+      <button class="tab-item" id="tab-history" onclick="switchTab('history')">📅 履歴</button>
     </div>
     <div class="content">
       <!-- Today panel -->
@@ -1253,22 +1250,22 @@ function renderHistoryList() {
   }
   keys.sort().reverse();
 
-  var badge=document.getElementById('history-badge');
-  if(keys.length>0){badge.style.display='inline';badge.textContent=keys.length;}
-  else{badge.style.display='none';}
-
   if(keys.length===0){
     el.innerHTML='<div class="empty"><div class="eicon">📅</div><p>履歴がありません<br><small>翌営業日以降に表示されます</small></p></div>';
     return;
   }
 
-  el.innerHTML = keys.map(function(k){
+  // Clear all button
+  var clearAllBtn = '<div style="text-align:right;margin-bottom:12px">'+
+    '<button onclick="clearAllHistory()" style="font-size:12px;color:var(--red);background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:7px 14px;font-family:inherit;font-weight:700;cursor:pointer">🗑 全履歴を削除</button>'+
+    '</div>';
+
+  var daysHtml = keys.map(function(k){
     var dateStr = k.replace('snap_','').replace(/-/g,'/');
     var all     = JSON.parse(store('get',k)||'[]');
     var orders  = isAdmin ? all : all.filter(function(o){return String(o.itemCode)===loginCode;});
     if(orders.length===0) return '';
 
-    // Group by product name (same as today tab)
     var gmap={},gorder=[];
     orders.forEach(function(o){
       var kw=getVariantKeyword(o.itemName),gk=kw||o.itemName;
@@ -1283,35 +1280,77 @@ function renderHistoryList() {
 
     var cards = gorder.map(function(gk){
       var g=gmap[gk];
-      var storeRows=g.rows.map(function(o){
-        return '<div style="display:grid;grid-template-columns:60px 1fr auto;align-items:center;padding:10px 16px;border-bottom:1px solid #f8fafc">'+
-          '<div style="padding-right:12px;border-right:2px solid #e8eef6;text-align:center">'+
-          '  <div style="font-size:22px;font-weight:900;color:var(--navy)">'+esc(o.custCode)+'</div>'+
-          (g.isVariant?'<div style="font-size:10px;color:#b0bac4;margin-top:2px">'+esc(o.itemName)+'</div>':'')+
-          '</div>'+
-          '<div></div>'+
-          '<div style="padding-left:12px;border-left:2px solid #e8eef6;text-align:center">'+
-          '  <div style="font-size:22px;font-weight:900;color:var(--navy)">'+fmtQty(o.qty)+'</div>'+
-          '  <div style="font-size:12px;color:var(--gray)">'+esc(o.unit)+'</div>'+
-          '</div>'+
-          '</div>';
-      }).join('');
+      var isTotalOnly = g.rows.length>0 && TOTAL_ONLY_GROUPS.indexOf(Number(g.rows[0].itemCode))!==-1;
+      var storeRows;
+      if(isTotalOnly){
+        var totalQty=0,unit='';
+        g.rows.forEach(function(o){totalQty+=parseFloat(o.qty)||0;if(!unit)unit=o.unit;});
+        storeRows='<div class="store-row" style="justify-content:center;padding:16px">'+
+          '<div style="text-align:center"><div class="store-qty" style="font-size:28px">'+fmtQty(totalQty)+'</div>'+
+          '<div class="store-unit">'+esc(unit)+'</div></div></div>';
+      } else {
+        storeRows=g.rows.map(function(o){
+          return '<div style="display:grid;grid-template-columns:60px 1fr auto;align-items:center;padding:10px 16px;border-bottom:1px solid #f8fafc">'+
+            '<div style="padding-right:12px;border-right:2px solid #e8eef6;text-align:center">'+
+            '  <div style="font-size:22px;font-weight:900;color:var(--navy)">'+esc(o.custCode)+'</div>'+
+            (g.isVariant?'<div style="font-size:10px;color:#b0bac4;margin-top:2px">'+esc(o.itemName)+'</div>':'')+
+            '</div>'+
+            '<div></div>'+
+            '<div style="padding-left:12px;border-left:2px solid #e8eef6;text-align:center">'+
+            '  <div style="font-size:22px;font-weight:900;color:var(--navy)">'+fmtQty(o.qty)+'</div>'+
+            '  <div style="font-size:12px;color:var(--gray)">'+esc(o.unit)+'</div>'+
+            '</div>'+
+            '</div>';
+        }).join('');
+      }
       return '<div class="product-card" style="margin-bottom:8px">'+
         '<div class="product-card-header"><div class="product-name">'+esc(g.label)+'</div></div>'+
         storeRows+'</div>';
     }).join('');
 
     return '<div style="margin-bottom:18px">'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 4px;cursor:pointer" onclick="toggleHistKey(\''+k+'\')">'+
-      '  <div style="font-size:14px;font-weight:700;color:var(--navy)">📅 '+dateStr+'</div>'+
-      '  <div style="display:flex;align-items:center;gap:8px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 4px">'+
+      '  <div style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1" onclick="toggleHistKey(\''+k+'\')">'+
+      '    <div style="font-size:14px;font-weight:700;color:var(--navy)">📅 '+dateStr+'</div>'+
       '    <span style="font-size:12px;color:var(--gray)">'+orders.length+'件</span>'+
       '    <span id="harr_'+k+'" style="font-size:11px;color:#aaa;transition:transform .2s'+(isOpen?';transform:rotate(180deg)':'')+'">▾</span>'+
       '  </div>'+
+      '  <button onclick="deleteHistDay(\''+k+'\')" style="font-size:11px;color:var(--red);background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:4px 10px;font-family:inherit;cursor:pointer">🗑</button>'+
       '</div>'+
       '<div id="hbody_'+k+'" style="display:'+(isOpen?'block':'none')+'">'+cards+'</div>'+
       '</div>';
   }).join('');
+
+  el.innerHTML = clearAllBtn + daysHtml;
+}
+
+function deleteHistDay(k){
+  var dateStr = k.replace('snap_','').replace(/-/g,'/');
+  if(!confirm(dateStr + ' の履歴を削除しますか？')) return;
+  localStorage.removeItem(k);
+  localStorage.removeItem('batches_'+k);
+  localStorage.removeItem('batchnum_'+k);
+  localStorage.removeItem('hist_open_'+k);
+  renderHistoryList();
+  showToast('削除しました');
+}
+
+function clearAllHistory(){
+  if(!confirm('全ての履歴を削除しますか？\nこの操作は元に戻せません。')) return;
+  var today = todayKey();
+  var toRemove = [];
+  for(var i=0;i<localStorage.length;i++){
+    var k=localStorage.key(i);
+    if(k&&k.match(/^snap_\d{4}-\d{2}-\d{2}$/)&&k!==today) toRemove.push(k);
+  }
+  toRemove.forEach(function(k){
+    localStorage.removeItem(k);
+    localStorage.removeItem('batches_'+k);
+    localStorage.removeItem('batchnum_'+k);
+    localStorage.removeItem('hist_open_'+k);
+  });
+  renderHistoryList();
+  showToast('全履歴を削除しました');
 }
 
 function toggleHistKey(k){
