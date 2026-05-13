@@ -681,10 +681,10 @@ body{font-family:'Noto Sans JP',-apple-system,'Hiragino Sans',sans-serif;backgro
 // CONFIG
 // ══════════════════════════════════════════════════════════════
 var CODE_LABELS = {
-  100:'市）グループ',101:'丸）グループ',102:'中）グループ',
-  103:'え）グループ',104:'貴）グループ',105:'若）グループ',
-  106:'立）グループ',107:'梅）グループ',108:'フ）グループ',
-  109:'食）グループ',111:'板）グループ'
+  100:'市', 101:'丸久', 102:'中山',
+  103:'えびす', 104:'貴水', 105:'若',
+  106:'立', 107:'梅', 108:'フ',
+  109:'食', 111:'板'
 };
 
 // 取引先の短縮名（Script 2 の NAME_MAP と同一）
@@ -1128,31 +1128,52 @@ function renderOrdersList() {
 function buildProductCard(group) {
   var isVariant = group.isVariant;
 
-  var rowsHtml = group.entries.map(function(entry) {
-    var o         = entry.o;
-    var fp        = orderFingerprint(o);
-    var cancelled = !!getGasDeleted()[fp];
-    var bInfo     = getBatchInfo(o);
-    var batchCls  = cancelled ? ' is-cancelled' : (bInfo ? ' is-new-' + bInfo.b : '');
-    var timeBadge = (!cancelled && bInfo) ? '<span class="new-time">' + bInfo.t + '</span>' : '';
-    var cancelMsg = cancelled
-      ? '<div class="cancelled-msg">大変申し訳ございません。こちらの注文はキャンセルとなりました。</div>' : '';
-    var shortName = getShortName(o.custCode);
-    return [
-      '<div class="store-row' + batchCls + '">',
-      '  <div class="store-code-block">',
-      '    <div class="store-code">' + esc(o.custCode) + '</div>',
-      '    <div class="store-name-short">' + esc(shortName || o.custName) + '</div>',
-      timeBadge, cancelMsg,
-      '  </div>',
-      '  <div class="store-mid">' + (isVariant ? esc(o.itemName) : '') + '</div>',
-      '  <div class="store-qty-block">',
-      '    <div class="store-qty' + (cancelled ? ' cancelled' : '') + '">' + fmtQty(o.qty) + '</div>',
-      '    <div class="store-unit">' + esc(o.unit) + '</div>',
-      '  </div>',
-      '</div>'
-    ].join('');
-  }).join('');
+  // グループ109（食）は合計のみ表示
+  var isTotalOnly = group.entries.length > 0 &&
+    TOTAL_ONLY_GROUPS.indexOf(Number(group.entries[0].o.itemCode)) !== -1;
+
+  var rowsHtml;
+  if (isTotalOnly) {
+    // 数量を合計して1行だけ表示
+    var totalQty = 0, unit = '';
+    group.entries.forEach(function(e){
+      var q = parseFloat(e.o.qty) || 0;
+      totalQty += q;
+      if (!unit) unit = e.o.unit;
+    });
+    rowsHtml = '<div class="store-row" style="justify-content:center;padding:16px">'+
+      '<div style="text-align:center">'+
+      '  <div class="store-qty" style="font-size:28px">'+fmtQty(totalQty)+'</div>'+
+      '  <div class="store-unit">'+esc(unit)+'</div>'+
+      '</div>'+
+      '</div>';
+  } else {
+    rowsHtml = group.entries.map(function(entry) {
+      var o         = entry.o;
+      var fp        = orderFingerprint(o);
+      var cancelled = !!getGasDeleted()[fp];
+      var bInfo     = getBatchInfo(o);
+      var batchCls  = cancelled ? ' is-cancelled' : (bInfo ? ' is-new-' + bInfo.b : '');
+      var timeBadge = (!cancelled && bInfo) ? '<span class="new-time">' + bInfo.t + '</span>' : '';
+      var cancelMsg = cancelled
+        ? '<div class="cancelled-msg">大変申し訳ございません。こちらの注文はキャンセルとなりました。</div>' : '';
+      var shortName = getShortName(o.custCode);
+      return [
+        '<div class="store-row' + batchCls + '">',
+        '  <div class="store-code-block">',
+        '    <div class="store-code">' + esc(o.custCode) + '</div>',
+        '    <div class="store-name-short">' + esc(shortName || o.custName) + '</div>',
+        timeBadge, cancelMsg,
+        '  </div>',
+        '  <div class="store-mid">' + (isVariant ? esc(o.itemName) : '') + '</div>',
+        '  <div class="store-qty-block">',
+        '    <div class="store-qty' + (cancelled ? ' cancelled' : '') + '">' + fmtQty(o.qty) + '</div>',
+        '    <div class="store-unit">' + esc(o.unit) + '</div>',
+        '  </div>',
+        '</div>'
+      ].join('');
+    }).join('');
+  }
 
   return [
     '<div class="product-card">',
@@ -1436,10 +1457,24 @@ function renderAdminList() {
   el.innerHTML = cpHtml + gorder.map(function(k){
     var g   = gmap[k];
     var cid = 'afc_'+skStr(k);
+    var isTotalOnly = g.rows.length > 0 &&
+      TOTAL_ONLY_GROUPS.indexOf(Number(g.rows[0].o.itemCode)) !== -1;
     var active  = g.rows.filter(function(r){return !r.deleted;});
     var deleted = g.rows.filter(function(r){return r.deleted;});
-    var storeRows = active.map(function(r){return buildAdminStoreRow(r);}).join('');
-    var delRows   = deleted.map(function(r){return buildAdminDeletedRow(r);}).join('');
+
+    var storeRows;
+    if (isTotalOnly) {
+      var totalQty = 0, unit = '';
+      active.forEach(function(r){ totalQty += parseFloat(r.qty)||0; if(!unit) unit=r.unit; });
+      storeRows = '<div class="store-row" style="justify-content:center;padding:16px">'+
+        '<div style="text-align:center">'+
+        '  <div class="store-qty" style="font-size:28px">'+fmtQty(totalQty)+'</div>'+
+        '  <div class="store-unit">'+esc(unit)+'</div>'+
+        '</div></div>';
+    } else {
+      storeRows = active.map(function(r){return buildAdminStoreRow(r);}).join('');
+    }
+    var delRows = deleted.map(function(r){return buildAdminDeletedRow(r);}).join('');
     return '<div class="s-fish-card" id="'+cid+'">'+
       '<div class="s-fish-header" onclick="toggleFC(\''+cid+'\')">'+
       '<div><div class="s-fish-name">'+esc(g.label)+'</div>'+
@@ -1659,13 +1694,15 @@ function renderIchiran(searchTerm) {
 function skStr(s){var r='';for(var i=0;i<s.length;i++){var c=s.charCodeAt(i);if((c>=65&&c<=90)||(c>=97&&c<=122)||(c>=48&&c<=57))r+=s[i];else r+='x'+c;}return r;}
 function sKey(fn,idx){return skStr(fn)+'_'+idx;}
 
+var TOTAL_ONLY_GROUPS = [109]; // このグループは合計のみ表示
+
 var SHIIRE_PRIORITY=['アナゴ','カツオ','タコ'];
 function getPriority(n){for(var i=0;i<SHIIRE_PRIORITY.length;i++){if(n.indexOf(SHIIRE_PRIORITY[i])!==-1)return i;}return SHIIRE_PRIORITY.length;}
 
 function initShiireTab(){
   if(shiireLoaded) return;
-  var now=new Date();
-  shiireSheet='仕入表'+(now.getMonth()+1)+'/'+now.getDate();
+  var d = businessDate();
+  shiireSheet='仕入表'+(d.getMonth()+1)+'/'+d.getDate();
   loadShiireData();
 }
 
