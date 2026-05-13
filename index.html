@@ -692,7 +692,7 @@ var NAME_MAP = {
   2:'大晴海', 3:'海の路', 4:'板付製造', 5:'魚蔵', 6:'どげん海', 7:'板付鮮魚',
   8:'萬漁箱', 9:'せんせんせん', 10:'一承', 11:'山尾天神',
   12:'山尾博多', 13:'山尾西新', 14:'魚屋', 15:'藤う那天神',
-  17:'フタクチ', 18:'野が海', 20:'又', 21:'飛うお', 22:'とりとりと', 30:'藤う那博多'
+  16:'一承東京', 17:'フタクチ', 18:'野が海', 20:'又', 21:'飛うお', 22:'とりとりと', 30:'藤う那博多'
 };
 
 // 商品名のバリアント統合（このキーワードを含む商品は1グループに）
@@ -836,7 +836,7 @@ function loadData() {
     store('set','gas_deleted_'+todayKey(), JSON.stringify(deletedFps));
 
     var freshOrders = json.orders || [];
-    detectNewOrders(freshOrders);
+    detectNewOrders(freshOrders, json.syncDate || '');
     todayOrders = freshOrders;
     saveSnapshot(freshOrders);
 
@@ -867,28 +867,34 @@ function orderFingerprint(o) {
   return [o.custCode, o.itemCode, o.itemName, o.qty, o.unit].join('|');
 }
 
-function detectNewOrders(freshOrders) {
+function detectNewOrders(freshOrders, syncDate) {
   newOrderKeys = {};
-  var prevRaw = store('get', todayKey());
-  if (!prevRaw) return;
+  var syncKey    = 'last_sync_' + loginCode;
+  var storedSync = store('get', syncKey) || '';
 
+  // syncDateが同じ → Scriptは動いていない → 何もしない
+  if (syncDate && storedSync === syncDate) return;
+
+  // 前回snapshotなし → 初回ロード → 比較なし、syncDateだけ更新
+  var prevRaw = store('get', todayKey());
+  if (!prevRaw) {
+    if (syncDate) store('set', syncKey, syncDate);
+    return;
+  }
+
+  // syncDateが変わった → Scriptが動いた → 新規注文を検出
   var prevOrders = JSON.parse(prevRaw);
-  var prevSet = {};
+  var prevSet    = {};
   prevOrders.forEach(function(o){ prevSet[orderFingerprint(o)] = true; });
 
   var newFound = [];
   freshOrders.forEach(function(o, i){
-    if (!prevSet[orderFingerprint(o)]) {
-      newFound.push(i);
-      newOrderKeys[i] = true;
-    }
+    if (!prevSet[orderFingerprint(o)]) { newFound.push(i); newOrderKeys[i] = true; }
   });
 
   if (newFound.length > 0) {
-    // Increment batch counter (max 3)
     var batchNum = Math.min(parseInt(store('get','batchnum_'+todayKey())||'0') + 1, 3);
     store('set','batchnum_'+todayKey(), batchNum);
-
     var batches = JSON.parse(store('get','batches_'+todayKey())||'{}');
     var hm = pad(new Date().getHours())+':'+pad(new Date().getMinutes());
     newFound.forEach(function(i){
@@ -896,6 +902,8 @@ function detectNewOrders(freshOrders) {
     });
     store('set','batches_'+todayKey(), JSON.stringify(batches));
   }
+
+  if (syncDate) store('set', syncKey, syncDate);
 }
 
 function getAdminDeleted() {
@@ -927,13 +935,20 @@ function saveSnapshot(orders) {
   pruneSnapshots();
 }
 
+// 営業日：20:00以降は翌日の営業日扱い
+function businessDate() {
+  var now = new Date();
+  if (now.getHours() >= 20) now.setDate(now.getDate() + 1);
+  return now;
+}
+
 function todayKey() {
-  var d = new Date();
+  var d = businessDate();
   return 'snap_' + d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
 }
 
 function getDateStr() {
-  var d = new Date();
+  var d = businessDate();
   return d.getFullYear() + '/' + pad(d.getMonth()+1) + '/' + pad(d.getDate());
 }
 
@@ -1027,7 +1042,8 @@ function renderOrdersList() {
     var readKey = 'cmt_read_'+todayKey()+'_'+loginCode;
     var isRead  = store('get', readKey) === '1';
     var expandKey = 'cmt_open_'+todayKey()+'_'+loginCode;
-    var isOpen  = store('get', expandKey) === '1';
+    // 未読はデフォルトで開く、確認済みはデフォルトで閉じる
+    var isOpen  = isRead ? store('get', expandKey) === '1' : store('get', expandKey) !== '0';
     if (isRead) {
       cmtHtml =
         '<div class="cmt-strip read" onclick="toggleCmtBanner()">'+
@@ -1207,61 +1223,83 @@ function saveNote() {
 // HISTORY
 // ══════════════════════════════════════════════════════════════
 function renderHistoryList() {
-  var el     = document.getElementById('history-list');
-  var today  = todayKey();
-  var keys   = [];
+  var el    = document.getElementById('history-list');
+  var today = todayKey();
+  var keys  = [];
   for (var i=0;i<localStorage.length;i++){
-    var k = localStorage.key(i);
-    if (k && k.match(/^snap_\d{4}-\d{2}-\d{2}$/) && k !== today){ keys.push(k); }
+    var k=localStorage.key(i);
+    if(k&&k.match(/^snap_\d{4}-\d{2}-\d{2}$/)&&k!==today) keys.push(k);
   }
   keys.sort().reverse();
 
-  // Update badge
-  var badge = document.getElementById('history-badge');
-  if (keys.length > 0){ badge.style.display='inline';badge.textContent=keys.length; }
-  else { badge.style.display='none'; }
+  var badge=document.getElementById('history-badge');
+  if(keys.length>0){badge.style.display='inline';badge.textContent=keys.length;}
+  else{badge.style.display='none';}
 
-  if (keys.length === 0) {
-    el.innerHTML = '<div class="empty"><div class="eicon">📅</div><p>履歴がありません<br><small>翌日以降に表示されます</small></p></div>';
+  if(keys.length===0){
+    el.innerHTML='<div class="empty"><div class="eicon">📅</div><p>履歴がありません<br><small>翌営業日以降に表示されます</small></p></div>';
     return;
   }
+
   el.innerHTML = keys.map(function(k){
-    var dateStr  = k.replace('snap_','').replace(/-/g,'/');
-    var raw      = store('get',k) || '[]';
-    var all      = JSON.parse(raw);
-    var filtered = isAdmin ? all : all.filter(function(o){ return String(o.itemCode)===loginCode; });
-    return [
-      '<div class="history-day">',
-      '  <div class="hday-header" onclick="toggleHistoryDay(this)">',
-      '    <div class="hday-date">📅 ' + dateStr + '</div>',
-      '    <div class="hday-right">',
-      '      <span class="hday-count">' + filtered.length + '件</span>',
-      '      <span class="hday-arrow">▾</span>',
-      '    </div>',
-      '  </div>',
-      '  <div class="hday-body">',
-      filtered.length === 0
-        ? '<div style="padding:14px;color:#aaa;font-size:13px;text-align:center">データなし</div>'
-        : filtered.map(function(o){
-            return '<div class="hday-row">' +
-              '<div>' +
-              '<div class="hday-item">'+esc(o.itemName)+'</div>' +
-              '<div class="hday-store">'+esc(o.custCode+' '+o.custName)+'</div>' +
-              '</div>' +
-              '<div class="hday-qty">'+o.qty+' '+esc(o.unit)+'</div>' +
-              '</div>';
-          }).join(''),
-      '  </div>',
-      '</div>'
-    ].join('');
+    var dateStr = k.replace('snap_','').replace(/-/g,'/');
+    var all     = JSON.parse(store('get',k)||'[]');
+    var orders  = isAdmin ? all : all.filter(function(o){return String(o.itemCode)===loginCode;});
+    if(orders.length===0) return '';
+
+    // Group by product name (same as today tab)
+    var gmap={},gorder=[];
+    orders.forEach(function(o){
+      var kw=getVariantKeyword(o.itemName),gk=kw||o.itemName;
+      if(!gmap[gk]){gmap[gk]={label:kw||o.itemName,isVariant:!!kw,rows:[]};gorder.push(gk);}
+      gmap[gk].rows.push(o);
+    });
+    gorder.forEach(function(gk){
+      gmap[gk].rows.sort(function(a,b){return parseFloat(a.custCode)-parseFloat(b.custCode);});
+    });
+
+    var isOpen = store('get','hist_open_'+k)==='1';
+
+    var cards = gorder.map(function(gk){
+      var g=gmap[gk];
+      var storeRows=g.rows.map(function(o){
+        return '<div style="display:grid;grid-template-columns:60px 1fr auto;align-items:center;padding:10px 16px;border-bottom:1px solid #f8fafc">'+
+          '<div style="padding-right:12px;border-right:2px solid #e8eef6;text-align:center">'+
+          '  <div style="font-size:22px;font-weight:900;color:var(--navy)">'+esc(o.custCode)+'</div>'+
+          (g.isVariant?'<div style="font-size:10px;color:#b0bac4;margin-top:2px">'+esc(o.itemName)+'</div>':'')+
+          '</div>'+
+          '<div></div>'+
+          '<div style="padding-left:12px;border-left:2px solid #e8eef6;text-align:center">'+
+          '  <div style="font-size:22px;font-weight:900;color:var(--navy)">'+fmtQty(o.qty)+'</div>'+
+          '  <div style="font-size:12px;color:var(--gray)">'+esc(o.unit)+'</div>'+
+          '</div>'+
+          '</div>';
+      }).join('');
+      return '<div class="product-card" style="margin-bottom:8px">'+
+        '<div class="product-card-header"><div class="product-name">'+esc(g.label)+'</div></div>'+
+        storeRows+'</div>';
+    }).join('');
+
+    return '<div style="margin-bottom:18px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 4px;cursor:pointer" onclick="toggleHistKey(\''+k+'\')">'+
+      '  <div style="font-size:14px;font-weight:700;color:var(--navy)">📅 '+dateStr+'</div>'+
+      '  <div style="display:flex;align-items:center;gap:8px">'+
+      '    <span style="font-size:12px;color:var(--gray)">'+orders.length+'件</span>'+
+      '    <span id="harr_'+k+'" style="font-size:11px;color:#aaa;transition:transform .2s'+(isOpen?';transform:rotate(180deg)':'')+'">▾</span>'+
+      '  </div>'+
+      '</div>'+
+      '<div id="hbody_'+k+'" style="display:'+(isOpen?'block':'none')+'">'+cards+'</div>'+
+      '</div>';
   }).join('');
 }
 
-function toggleHistoryDay(header) {
-  var body  = header.nextElementSibling;
-  var arrow = header.querySelector('.hday-arrow');
-  var open  = body.classList.toggle('open');
-  arrow.classList.toggle('open', open);
+function toggleHistKey(k){
+  var body=document.getElementById('hbody_'+k);
+  var arr=document.getElementById('harr_'+k);
+  var open=body.style.display==='none';
+  body.style.display=open?'block':'none';
+  arr.style.transform=open?'rotate(180deg)':'';
+  store('set','hist_open_'+k,open?'1':'0');
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1291,7 +1329,38 @@ function renderAdmin(syncDate) {
   }).join('');
 
   currentGroup = groups[0] || 'ichiran';
+  renderAdminCmtBanner();
   renderAdminList();
+}
+
+function renderAdminCmtBanner() {
+  var cmtEl = document.getElementById('admin-comment-area');
+  if (!cmtEl || currentGroup === 'ichiran') {
+    if (cmtEl) cmtEl.innerHTML = '';
+    return;
+  }
+  var cmt     = groupComments[String(currentGroup)] || {};
+  var expandKey = 'acmt_open_'+todayKey()+'_'+currentGroup;
+  var isOpen  = store('get', expandKey) !== '0'; // デフォルトで開く
+
+  cmtEl.innerHTML =
+    '<div class="cmt-strip unread" onclick="toggleAdminCmtBanner()" style="margin-bottom:12px">'+
+    '  <span class="cmt-strip-dot" style="background:#991b1b;animation:none"></span>'+
+    '  <span class="cmt-strip-label">📢 管理者コメント'+(cmt.text?'':'（未設定）')+'</span>'+
+    '  <span class="cmt-strip-arrow'+(isOpen?' open':'')+'">▾</span>'+
+    '</div>'+
+    (isOpen ?
+      '<div class="cmt-expanded" style="background:#fff1f1;border-color:#fca5a5;margin-bottom:12px">'+
+      '<div class="cmt-expanded-text">'+(cmt.text ? esc(cmt.text) : '<span style="opacity:.4">コメントなし — 下のボタンから追加できます</span>')+'</div>'+
+      (cmt.time?'<div style="font-size:11px;color:#aaa;margin-bottom:12px">'+cmt.time+' 掲載</div>':'<div style="margin-bottom:12px"></div>')+
+      '<button class="btn-cmt-read" style="background:var(--navy)" onclick="openCmtModal();event.stopPropagation()">✏️ '+(cmt.text?'編集する':'コメントを追加')+'</button>'+
+      '</div>' : '');
+}
+
+function toggleAdminCmtBanner() {
+  var expandKey = 'acmt_open_'+todayKey()+'_'+currentGroup;
+  store('set', expandKey, store('get',expandKey)==='1'?'0':'1');
+  renderAdminCmtBanner();
 }
 
 function selectAdminGroup(code) {
@@ -1299,6 +1368,7 @@ function selectAdminGroup(code) {
   document.querySelectorAll('#admin-tab-bar .tab-item').forEach(function(b){
     b.classList.toggle('active', String(b.dataset.code)===String(code));
   });
+  renderAdminCmtBanner();
   if (code === 'ichiran') {
     renderIchiran('');
   } else {
@@ -1309,19 +1379,6 @@ function selectAdminGroup(code) {
 function renderAdminList() {
   adminEdits = JSON.parse(store('get','admin_edits_'+todayKey()) || '{}');
   var el   = document.getElementById('admin-list');
-  var cmtEl= document.getElementById('admin-comment-area');
-
-  // Comment banner per group
-  if (currentGroup !== 'all') {
-    var cmt = groupComments[String(currentGroup)] || {};
-    cmtEl.innerHTML =
-      '<div class="admin-comment-banner" style="margin-bottom:12px">' +
-      '<div class="acb-label"><span class="acb-pulse"></span>管理者コメント — ' + (CODE_LABELS[Number(currentGroup)]||'グループ'+currentGroup) + '</div>' +
-      '<div class="acb-text">' + (cmt.text ? esc(cmt.text) : '<span style="opacity:.4;font-size:13px">コメントなし</span>') + '</div>' +
-      (cmt.time ? '<div class="acb-time">'+cmt.time+' 掲載</div>' : '') +
-      '<button class="acb-edit" onclick="openCmtModal()">✏️ 編集</button>' +
-      '</div>';
-  } else { cmtEl.innerHTML = ''; }
 
   var allRows = todayOrders.map(function(o,i){
     var key  = orderKey(i,o);
@@ -1342,6 +1399,30 @@ function renderAdminList() {
     return;
   }
 
+  // ── Yellow comment panel (store comments) ── same as partner view
+  var commentMap = {};
+  rows.forEach(function(r){
+    if(r.o.comment && !commentMap[r.o.custCode]){
+      commentMap[r.o.custCode] = { name: getShortName(r.o.custCode)||r.o.custName, text: r.o.comment };
+    }
+  });
+  var commentEntries = Object.keys(commentMap);
+  var cpHtml = '';
+  if(commentEntries.length > 0){
+    var cpRows = commentEntries.map(function(code){
+      var c = commentMap[code];
+      return '<div class="cp-row"><div class="cp-store">'+esc(code+' '+c.name)+'</div><div class="cp-text">'+esc(c.text)+'</div></div>';
+    }).join('');
+    cpHtml = '<div class="comment-panel">'+
+      '<div class="comment-panel-header" onclick="toggleCommentPanel(this)">'+
+      '<span class="cp-icon">📌</span>'+
+      '<span class="cp-title">コメントあり（'+commentEntries.length+'件）</span>'+
+      '<span class="cp-arrow">▾</span>'+
+      '</div>'+
+      '<div class="comment-panel-body">'+cpRows+'</div>'+
+      '</div>';
+  }
+
   var gmap={}, gorder=[];
   rows.forEach(function(r){
     var kw=getVariantKeyword(r.o.itemName), gk=kw||r.o.itemName;
@@ -1352,7 +1433,7 @@ function renderAdminList() {
     gmap[k].rows.sort(function(a,b){return parseFloat(a.o.custCode)-parseFloat(b.o.custCode);});
   });
 
-  el.innerHTML = gorder.map(function(k){
+  el.innerHTML = cpHtml + gorder.map(function(k){
     var g   = gmap[k];
     var cid = 'afc_'+skStr(k);
     var active  = g.rows.filter(function(r){return !r.deleted;});
