@@ -581,13 +581,30 @@ body{font-family:'Noto Sans JP',-apple-system,'Hiragino Sans',sans-serif;backgro
 
   <!-- ── ADMIN VIEW ── -->
   <div id="admin-view" style="display:none;flex-direction:column;flex:1">
-    <div class="tab-bar" id="admin-tab-bar" style="overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none"></div>
-    <div class="content">
-      <div id="admin-new-banner" style="display:none"></div>
-      <div id="admin-comment-area"></div>
-      <div style="font-size:11px;color:#94a3b8;text-align:center;padding:4px 0 10px">⚠️ 編集はアプリ内のみ保存</div>
-      <div id="admin-list"></div>
+    <!-- Admin main tabs: 注文確認 | 仕入入力 -->
+    <div class="tab-bar" id="admin-main-tab-bar">
+      <button class="tab-item active" id="admin-main-tab-orders" onclick="switchAdminMainTab('orders')" style="flex:1">📋 注文確認</button>
+      <button class="tab-item" id="admin-main-tab-shiire" onclick="switchAdminMainTab('shiire')" style="flex:1">💴 仕入入力</button>
     </div>
+
+    <!-- 注文確認 section -->
+    <div id="admin-orders-section" style="display:flex;flex-direction:column;flex:1">
+      <div class="tab-bar" id="admin-tab-bar" style="overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none"></div>
+      <div class="content">
+        <div id="admin-new-banner" style="display:none"></div>
+        <div id="admin-comment-area"></div>
+        <div style="font-size:11px;color:#94a3b8;text-align:center;padding:4px 0 10px">⚠️ 編集はアプリ内のみ保存</div>
+        <div id="admin-list"></div>
+      </div>
+    </div>
+
+    <!-- 仕入入力 section -->
+    <div id="admin-shiire-section" style="display:none;flex:1;overflow-y:auto">
+      <div class="content">
+        <div id="admin-shiire-panel"></div>
+      </div>
+    </div>
+
     <div class="footer-link"><a onclick="doLogout()">← 設定に戻る</a></div>
   </div>
 
@@ -1641,88 +1658,89 @@ function renderIchiran(searchTerm) {
   var cmtEl= document.getElementById('admin-comment-area');
   cmtEl.innerHTML = '';
 
-  var kw = (searchTerm||'').trim().toLowerCase();
+  // 検索ボックスはDOMを壊さず保持（キーボードが閉じないように）
+  var searchBox = document.getElementById('ichiran-search-box');
+  if (!searchBox) {
+    el.innerHTML =
+      '<div id="ichiran-search-box" style="background:white;border-radius:11px;border:1.5px solid var(--border);display:flex;align-items:center;gap:8px;padding:10px 14px;margin-bottom:14px;box-shadow:var(--shadow-sm)">'+
+      '<span style="font-size:16px">🔍</span>'+
+      '<input type="search" id="ichiran-search-input" placeholder="店舗名・商品名・コードで検索..." '+
+      'oninput="filterIchiran(this.value)" '+
+      'style="flex:1;border:none;outline:none;font-size:14px;font-family:inherit;color:var(--navy);background:transparent">'+
+      '</div>'+
+      '<div id="ichiran-results"></div>';
+  }
+  filterIchiran(searchTerm || '');
+  // 検索ボックスに値をセット
+  var inp = document.getElementById('ichiran-search-input');
+  if (inp && searchTerm !== undefined) inp.value = searchTerm;
+}
 
-  // Sort all orders by custCode ascending
+function filterIchiran(kw) {
+  var el = document.getElementById('ichiran-results');
+  if (!el) return;
+  kw = (kw||'').trim().toLowerCase();
+  adminEdits = JSON.parse(store('get','admin_edits_'+todayKey())||'{}');
+
   var allSorted = todayOrders.slice().sort(function(a,b){
-    return parseFloat(a.custCode) - parseFloat(b.custCode);
+    return parseFloat(a.custCode)-parseFloat(b.custCode);
   });
 
   var rows = allSorted.filter(function(o){
-    if (!kw) return true;
-    var sname = (getShortName(o.custCode)||o.custName||'').toLowerCase();
-    var iname = (o.itemName||'').toLowerCase();
-    var code  = String(o.custCode).toLowerCase();
-    return sname.indexOf(kw)!==-1 || iname.indexOf(kw)!==-1 || code.indexOf(kw)!==-1;
+    if(!kw) return true;
+    var sname=(getShortName(o.custCode)||o.custName||'').toLowerCase();
+    var iname=(o.itemName||'').toLowerCase();
+    var code =String(o.custCode).toLowerCase();
+    return sname.indexOf(kw)!==-1||iname.indexOf(kw)!==-1||code.indexOf(kw)!==-1;
   });
 
-  var searchHtml =
-    '<div style="background:white;border-radius:11px;border:1.5px solid var(--border);display:flex;align-items:center;gap:8px;padding:10px 14px;margin-bottom:14px;box-shadow:var(--shadow-sm)">'+
-    '<span style="font-size:16px">🔍</span>'+
-    '<input type="search" id="ichiran-search" value="'+esc(searchTerm||'')+'" placeholder="店舗名・商品名・コードで検索..." '+
-    'oninput="renderIchiran(this.value)" '+
-    'style="flex:1;border:none;outline:none;font-size:14px;font-family:inherit;color:var(--navy);background:transparent">'+
-    '</div>';
-
-  if (rows.length === 0) {
-    el.innerHTML = searchHtml + '<div class="empty"><div class="eicon">🔍</div><p>該当なし</p></div>';
+  if(rows.length===0){
+    el.innerHTML='<div class="empty"><div class="eicon">🔍</div><p>該当なし</p></div>';
     return;
   }
 
-  // Group by store (custCode)
-  var storeGroups = [], storeMap = {};
+  // Group by store
+  var storeGroups=[],storeMap={};
   rows.forEach(function(o){
-    var k = String(o.custCode);
-    if (!storeMap[k]) {
-      storeMap[k] = { code: o.custCode, name: getShortName(o.custCode)||o.custName, items: [] };
+    var k=String(o.custCode);
+    if(!storeMap[k]){
+      storeMap[k]={code:o.custCode,name:getShortName(o.custCode)||o.custName,items:[]};
       storeGroups.push(storeMap[k]);
     }
-    var adminEdit = (adminEdits||{})[orderKey(todayOrders.indexOf(o), o)] || {};
-    var qty  = adminEdit.qty  !== undefined ? adminEdit.qty  : o.qty;
-    var unit = adminEdit.unit !== undefined ? adminEdit.unit : o.unit;
-    var deleted = !!adminEdit.deleted || !!getGasDeleted()[orderFingerprint(o)];
-    var bInfo= getBatchInfo(o);
-    storeMap[k].items.push({ o:o, qty:qty, unit:unit, deleted:deleted, bInfo:bInfo });
+    var edit=(adminEdits||{})[orderKey(todayOrders.indexOf(o),o)]||{};
+    var qty  =edit.qty  !==undefined?edit.qty  :o.qty;
+    var unit =edit.unit !==undefined?edit.unit :o.unit;
+    var deleted=!!edit.deleted||!!getGasDeleted()[orderFingerprint(o)];
+    var bInfo=getBatchInfo(o);
+    storeMap[k].items.push({o:o,qty:qty,unit:unit,deleted:deleted,bInfo:bInfo});
   });
 
-  var storeCards = storeGroups.map(function(sg){
-    var itemRows = sg.items.map(function(it){
-      var deleted = it.deleted;
-      var bInfo   = it.bInfo;
-      var leftBorder = bInfo ? 'border-left:3px solid '+(bInfo.b===1?'#f59e0b':bInfo.b===2?'#0ea5e9':'#8b5cf6')+';' : '';
-      var grpLbl = CODE_LABELS[Number(it.o.itemCode)]||('コード'+it.o.itemCode);
-      return '<div style="display:flex;justify-content:space-between;align-items:center;'+
-        'padding:10px 16px;border-bottom:1px solid #f8fafc;'+
-        (deleted?'opacity:.4;background:#fff5f5;':'background:white;')+leftBorder+'">'+
+  var storeCards=storeGroups.map(function(sg){
+    var itemRows=sg.items.map(function(it){
+      var deleted=it.deleted,bInfo=it.bInfo;
+      var leftBorder=bInfo?'border-left:3px solid '+(bInfo.b===1?'#f59e0b':bInfo.b===2?'#0ea5e9':'#8b5cf6')+';':'';
+      var grpLbl=CODE_LABELS[Number(it.o.itemCode)]||('コード'+it.o.itemCode);
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #f8fafc;'+(deleted?'opacity:.4;background:#fff5f5;':'background:white;')+leftBorder+'">'+
         '<div style="flex:1;min-width:0">'+
-        '<div style="font-size:14px;font-weight:700;color:var(--navy)'+(deleted?';text-decoration:line-through;color:#aaa':'')+'">'
-        +esc(it.o.itemName)+'</div>'+
+        '<div style="font-size:14px;font-weight:700;color:var(--navy)'+(deleted?';text-decoration:line-through;color:#aaa':'')+'">' +esc(it.o.itemName)+'</div>'+
         '<div style="font-size:11px;color:#94a3b8;margin-top:2px">'+esc(grpLbl)+
         (it.o.comment?' · 📌'+esc(it.o.comment):'')+
-        (bInfo?' · <span style="color:'+(bInfo.b===1?'#f59e0b':bInfo.b===2?'#0ea5e9':'#8b5cf6')+'">'+bInfo.t+'</span>':'')+
         (deleted?' · <span style="color:#ef4444">キャンセル</span>':'')+
-        '</div>'+
-        '</div>'+
+        '</div></div>'+
         '<div style="text-align:right;flex-shrink:0;margin-left:12px">'+
         '<div style="font-size:20px;font-weight:900;color:var(--navy)'+(deleted?';text-decoration:line-through;color:#aaa':'')+'">'+fmtQty(it.qty)+'</div>'+
         '<div style="font-size:12px;color:var(--gray)">'+esc(it.unit)+'</div>'+
-        '</div>'+
-        '</div>';
+        '</div></div>';
     }).join('');
-
     return '<div style="background:white;border-radius:14px;border:1.5px solid var(--border);margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow-sm)">'+
       '<div style="background:var(--navy);padding:12px 16px;display:flex;align-items:center;gap:12px">'+
       '<div style="font-size:26px;font-weight:900;color:white;line-height:1">'+esc(sg.code)+'</div>'+
-      '<div>'+
-      '<div style="font-size:14px;font-weight:700;color:white">'+esc(sg.name)+'</div>'+
-      '<div style="font-size:11px;color:rgba(255,255,255,0.5)">'+sg.items.length+'件</div>'+
-      '</div>'+
-      '</div>'+
-      itemRows+
-      '</div>';
+      '<div><div style="font-size:14px;font-weight:700;color:white">'+esc(sg.name)+'</div>'+
+      '<div style="font-size:11px;color:rgba(255,255,255,0.5)">'+sg.items.length+'件</div></div>'+
+      '</div>'+itemRows+'</div>';
   }).join('');
 
-  el.innerHTML = searchHtml + storeCards +
+  el.innerHTML = storeCards +
     '<div style="text-align:center;font-size:11px;color:#aaa;padding:8px">'+rows.length+'件 / '+storeGroups.length+'店舗</div>';
 }
 
@@ -1745,7 +1763,12 @@ function initShiireTab(){
   loadShiireData();
 }
 
-function reloadShiire(){ shiireLoaded=false; initShiireTab(); }
+function selectShiirePrefix(prefix){
+  shiireCurrentPrefix = prefix;
+  renderShiireList();
+}
+
+function reloadShiire(){ shiireLoaded=false; shiireCurrentPrefix=null; initShiireTab(); }
 
 async function loadShiireData(){
   showLoading('仕入データを読み込み中...');
@@ -1762,9 +1785,54 @@ async function loadShiireData(){
   hideLoading();
 }
 
+function switchAdminMainTab(tab) {
+  document.getElementById('admin-main-tab-orders').classList.toggle('active', tab==='orders');
+  document.getElementById('admin-main-tab-shiire').classList.toggle('active', tab==='shiire');
+  document.getElementById('admin-orders-section').style.display = tab==='orders' ? 'flex' : 'none';
+  document.getElementById('admin-shiire-section').style.display = tab==='shiire' ? 'flex' : 'none';
+  document.getElementById('admin-shiire-section').style.flexDirection = 'column';
+  if(tab==='shiire'){
+    if(!shiireLoaded) initShiireTab();
+    else renderShiireList();
+  }
+}
+
+var shiireCurrentPrefix = null; // null = 全て
+
 function renderShiireList(){
-  var prefix=isAdmin?null:(CODE_TO_PREFIX[Number(loginCode)]||null);
-  var el=document.getElementById('panel-shiire');
+  var panelId = isAdmin ? 'admin-shiire-panel' : 'panel-shiire';
+  var el = document.getElementById(panelId);
+  if(!el) return;
+
+  // Build prefix list from data
+  var allNames = Object.keys(shiireData);
+  var prefixSet = {};
+  allNames.forEach(function(n){
+    var pfx = n.substring(0,2); // e.g. '丸）'
+    if(pfx.indexOf('）')!==-1) prefixSet[pfx]=true;
+  });
+  var prefixes = Object.keys(CODE_TO_PREFIX).map(function(c){return CODE_TO_PREFIX[c];})
+    .filter(function(p){return prefixSet[p];});
+
+  // Tab bar (admin only or partner with multiple groups)
+  var showTabs = isAdmin && prefixes.length > 1;
+  var tabBarHtml = '';
+  if(showTabs){
+    if(!shiireCurrentPrefix) shiireCurrentPrefix = prefixes[0];
+    tabBarHtml = '<div style="display:flex;overflow-x:auto;gap:4px;padding:0 0 12px;scrollbar-width:none">'+
+      prefixes.map(function(p){
+        var lbl = Object.keys(CODE_TO_PREFIX).reduce(function(acc,c){
+          return CODE_TO_PREFIX[c]===p ? CODE_LABELS[Number(c)]||p : acc;
+        },'');
+        var active = shiireCurrentPrefix===p;
+        return '<button onclick="selectShiirePrefix(\''+p+'\')" style="flex-shrink:0;padding:7px 16px;border-radius:20px;border:1.5px solid '+(active?'var(--navy)':'var(--border)')+';background:'+(active?'var(--navy)':'white')+';color:'+(active?'white':'var(--gray)')+';font-size:13px;font-weight:700;font-family:inherit;cursor:pointer">'+esc(lbl)+'</button>';
+      }).join('')+
+      '</div>';
+  } else {
+    shiireCurrentPrefix = isAdmin ? null : (CODE_TO_PREFIX[Number(loginCode)]||null);
+  }
+
+  var prefix = shiireCurrentPrefix;
   var hdr='<div style="background:white;border-radius:11px;padding:11px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border:1px solid var(--border);box-shadow:var(--shadow-sm)">'+
     '<div><div style="font-size:13px;font-weight:700;color:var(--navy)">'+esc(shiireSheet)+'</div>'+
     '<div style="font-size:11px;color:var(--gray)">本日の仕入入力</div></div>'+
@@ -1777,7 +1845,7 @@ function renderShiireList(){
     if(pa!==pb)return pa-pb;
     return (kwa||a).localeCompare(kwb||b,'ja');
   });
-  if(names.length===0){el.innerHTML=hdr+'<div class="empty"><div class="eicon">📋</div><p>データがありません</p></div>';return;}
+  if(names.length===0){el.innerHTML=hdr+tabBarHtml+'<div class="empty"><div class="eicon">📋</div><p>データがありません</p></div>';return;}
   var rendered={},cards=[];
   names.forEach(function(fn){
     var gkw=null;
@@ -1789,7 +1857,7 @@ function renderShiireList(){
       if(!rendered[fn]){rendered[fn]=true;cards.push(buildFishCard(fn));}
     }
   });
-  el.innerHTML=hdr+cards.join('');
+  el.innerHTML=hdr+tabBarHtml+cards.join('');
 }
 
 function buildFishCard(fn){
