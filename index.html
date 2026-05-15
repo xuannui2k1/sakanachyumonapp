@@ -1649,6 +1649,17 @@ function restoreAdminRow(key){
   adminEdits=JSON.parse(store('get','admin_edits_'+todayKey())||'{}');
   if(adminEdits[key]) adminEdits[key].deleted=false;
   store('set','admin_edits_'+todayKey(), JSON.stringify(adminEdits));
+  // Báo server bỏ đơn này khỏi danh sách đã xoá
+  for(var j=0;j<todayOrders.length;j++){
+    if(orderKey(j,todayOrders[j])===key){
+      var fp=orderFingerprint(todayOrders[j]);
+      var ds=todayKey().replace('snap_','');
+      fetch(gasUrl+'?action=unmarkDeleted&fp='+encodeURIComponent(fp)+'&date='+encodeURIComponent(ds)).catch(function(){});
+      var d=getGasDeleted(); delete d[fp];
+      store('set','gas_deleted_'+todayKey(), JSON.stringify(d));
+      break;
+    }
+  }
   showToast('復元しました','success');
   renderAdminList();
 }
