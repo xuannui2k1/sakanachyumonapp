@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>注文確認システム</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -18,7 +17,7 @@
   --shadow:0 4px 24px rgba(15,39,68,0.10);
   --shadow-sm:0 2px 8px rgba(15,39,68,0.07);
 }
-body{font-family:'Noto Sans JP',-apple-system,'Hiragino Sans',sans-serif;background:#f0f4f8;color:#1a1a2e;min-height:100vh}
+body{font-family:-apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-serif;background:#f0f4f8;color:#1a1a2e;min-height:100vh}
 
 /* ══════════════════════════════════════════
    SETUP SCREEN
@@ -283,32 +282,6 @@ body{font-family:'Noto Sans JP',-apple-system,'Hiragino Sans',sans-serif;backgro
 .empty .eicon{font-size:48px;margin-bottom:14px}
 .empty p{font-size:14px}
 
-/* ── HISTORY ── */
-.history-day{
-  background:white;border-radius:13px;border:1px solid var(--border);
-  margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow-sm)
-}
-.hday-header{
-  padding:13px 16px;display:flex;justify-content:space-between;
-  align-items:center;cursor:pointer;user-select:none
-}
-.hday-header:active{background:var(--gray-light)}
-.hday-date{font-size:14px;font-weight:700;color:var(--navy)}
-.hday-right{display:flex;align-items:center;gap:8px}
-.hday-count{font-size:12px;color:var(--gray)}
-.hday-arrow{font-size:12px;color:var(--gray);transition:transform .2s}
-.hday-arrow.open{transform:rotate(180deg)}
-.hday-body{display:none;border-top:1px solid var(--border)}
-.hday-body.open{display:block}
-.hday-row{
-  padding:11px 16px;border-bottom:1px solid #f8fafc;
-  display:flex;justify-content:space-between;align-items:center
-}
-.hday-row:last-child{border-bottom:none}
-.hday-item{font-size:13px;font-weight:700;color:var(--navy)}
-.hday-store{font-size:11px;color:#94a3b8;margin-top:2px}
-.hday-qty{font-size:13px;color:var(--gray);white-space:nowrap;margin-left:8px}
-
 /* ══════════════════════════════════════════
    ADMIN VIEW
 ══════════════════════════════════════════ */
@@ -477,7 +450,6 @@ body{font-family:'Noto Sans JP',-apple-system,'Hiragino Sans',sans-serif;backgro
 .s-store-list{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
 .s-store-row{background:#fafbfd;border:1.5px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color .2s}
 .s-store-row.filled{border-color:#a5d6a7;background:#f9fdf9}
-.s-store-row.locked{background:#f1f8e9;border-color:#c5e1a5}
 .s-store-header{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;cursor:pointer;user-select:none}
 .s-store-header:active{background:#f0f4fa}
 .s-store-name-text{font-size:14px;font-weight:700;color:var(--navy)}
@@ -486,16 +458,12 @@ body{font-family:'Noto Sans JP',-apple-system,'Hiragino Sans',sans-serif;backgro
 .badge-filled{background:#e8f5e9;color:#2e7d32}
 .s-input-area{display:none;border-top:1px solid var(--border);padding:14px;background:white}
 .s-input-area.open{display:block}
-.s-store-row.locked .s-input-area input{background:#f5f9f0;color:#777;pointer-events:none}
 .s-input-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px}
 .s-field{display:flex;flex-direction:column;gap:5px}
 .s-field label{font-size:10px;color:#aaa;font-weight:700;letter-spacing:.3px;text-transform:uppercase}
 .s-field input{padding:10px;border:1.5px solid var(--border);border-radius:10px;font-size:18px;font-family:inherit;width:100%;text-align:right;font-weight:600;color:var(--navy);background:#fafbfd;transition:border-color .2s}
 .s-field input:focus{outline:none;border-color:var(--navy);background:white}
 .s-btn-row{display:flex;gap:8px}
-.s-btn-lock{flex:1;padding:11px;background:var(--green);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer}
-.s-btn-lock:active{opacity:.85}
-.s-btn-unlock{padding:11px 16px;background:#fff3e0;color:#e65100;border:1.5px solid #ffcc80;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;display:none}
 .s-save-msg{text-align:center;font-size:12px;margin-top:8px;min-height:16px;font-weight:600}
 .s-save-msg.ok{color:var(--green)}
 .s-save-msg.err{color:var(--red)}
@@ -551,7 +519,6 @@ body{font-family:'Noto Sans JP',-apple-system,'Hiragino Sans',sans-serif;backgro
     <div class="tab-bar">
       <button class="tab-item active" id="tab-today" onclick="switchTab('today')">📋 今日の注文</button>
       <button class="tab-item" id="tab-shiire" onclick="switchTab('shiire')">💴 仕入入力</button>
-      <button class="tab-item" id="tab-history" onclick="switchTab('history')">📅 履歴</button>
     </div>
     <div class="content">
       <!-- Today panel -->
@@ -564,17 +531,7 @@ body{font-family:'Noto Sans JP',-apple-system,'Hiragino Sans',sans-serif;backgro
         <div id="orders-list"></div>
       </div>
       <!-- Shiire panel -->
-      <div id="panel-shiire" style="display:none">
-        <div style="text-align:center;padding:60px 20px;color:var(--gray)">
-          <div style="font-size:48px;margin-bottom:14px">💴</div>
-          <p style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:8px">仕入入力</p>
-          <p style="font-size:13px">近日中に追加予定です</p>
-        </div>
-      </div>
-      <!-- History panel -->
-      <div id="panel-history" style="display:none">
-        <div id="history-list"></div>
-      </div>
+      <div id="panel-shiire" style="display:none"></div>
     </div>
     <div class="footer-link"><a onclick="doLogout()">← 設定に戻る</a></div>
   </div>
@@ -717,7 +674,6 @@ var VARIANT_GROUPS = [
 ];
 
 var ADMIN_CODE   = '999';
-var HISTORY_DAYS = 7;
 
 // ══════════════════════════════════════════════════════════════
 // ★ Admin: URLをここに貼り付けてください（変更時はこの1行だけ）
@@ -745,6 +701,7 @@ var groupComments= {}; // { code: { text, time } }
 var SHIIRE_GAS_URL  = 'https://script.google.com/macros/s/AKfycbyYMX11UjruGgm3NJw9cJmPQ02n3vZOhAkX_WyCV7Uhsv65RbOAHGmvQH51PgxpIH8/exec';
 var SHIIRE_SHEET_ID = '1mXrNddkibkMpUBcof-vhPNTzahO3Y456Ejh6obNU9zw';
 var CODE_TO_PREFIX  = {
+  100:'市）',
   101:'丸）',102:'中）',103:'え）',104:'貴）',
   105:'若）',106:'立）',107:'梅）',108:'フ）',
   109:'食）',111:'板）'
@@ -944,9 +901,7 @@ function getNewInfo() {
 // SNAPSHOT STORAGE
 // ══════════════════════════════════════════════════════════════
 function saveSnapshot(orders) {
-  // Ghi đè snapshot hôm nay — lần load tiếp theo sẽ so sánh với cái này
   store('set', todayKey(), JSON.stringify(orders));
-  pruneSnapshots();
 }
 
 // 営業日：20:00以降は翌日の営業日扱い
@@ -966,18 +921,6 @@ function getDateStr() {
   return d.getFullYear() + '/' + pad(d.getMonth()+1) + '/' + pad(d.getDate());
 }
 
-function pruneSnapshots() {
-  var keys = [];
-  for (var i=0;i<localStorage.length;i++){
-    var k = localStorage.key(i);
-    if (k && k.match(/^snap_\d{4}-\d{2}-\d{2}$/)){ keys.push(k); }
-  }
-  keys.sort().reverse().slice(HISTORY_DAYS).forEach(function(k){
-    localStorage.removeItem(k);
-    localStorage.removeItem('batches_'+k);
-    localStorage.removeItem('batchnum_'+k);
-  });
-}
 
 // ══════════════════════════════════════════════════════════════
 // PARTNER VIEW
@@ -995,7 +938,6 @@ function renderPartner(syncDate) {
 
   renderNewBanner('new-banner', false);
   renderOrdersList();
-  renderHistoryList();
   switchTab('today');
 }
 
@@ -1224,10 +1166,8 @@ function markCmtRead(e) {
 function switchTab(tab) {
   document.getElementById('tab-today').classList.toggle('active',   tab==='today');
   document.getElementById('tab-shiire').classList.toggle('active',  tab==='shiire');
-  document.getElementById('tab-history').classList.toggle('active', tab==='history');
   document.getElementById('panel-today').style.display   = tab==='today'   ? 'block':'none';
   document.getElementById('panel-shiire').style.display  = tab==='shiire'  ? 'block':'none';
-  document.getElementById('panel-history').style.display = tab==='history' ? 'block':'none';
   if (tab==='shiire' && !shiireLoaded) initShiireTab();
 }
 
@@ -1255,131 +1195,6 @@ function saveNote() {
 }
 
 // ══════════════════════════════════════════════════════════════
-// HISTORY
-// ══════════════════════════════════════════════════════════════
-function renderHistoryList() {
-  var el    = document.getElementById('history-list');
-  var today = todayKey();
-  var keys  = [];
-  for (var i=0;i<localStorage.length;i++){
-    var k=localStorage.key(i);
-    if(k&&k.match(/^snap_\d{4}-\d{2}-\d{2}$/)&&k!==today) keys.push(k);
-  }
-  keys.sort().reverse();
-
-  if(keys.length===0){
-    el.innerHTML='<div class="empty"><div class="eicon">📅</div><p>履歴がありません<br><small>翌営業日以降に表示されます</small></p></div>';
-    return;
-  }
-
-  // Clear all button
-  var clearAllBtn = '<div style="text-align:right;margin-bottom:12px">'+
-    '<button onclick="clearAllHistory()" style="font-size:12px;color:var(--red);background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:7px 14px;font-family:inherit;font-weight:700;cursor:pointer">🗑 全履歴を削除</button>'+
-    '</div>';
-
-  var daysHtml = keys.map(function(k){
-    var dateStr = k.replace('snap_','').replace(/-/g,'/');
-    var all     = JSON.parse(store('get',k)||'[]');
-    var orders  = isAdmin ? all : all.filter(function(o){return String(o.itemCode)===loginCode;});
-    if(orders.length===0) return '';
-
-    var gmap={},gorder=[];
-    orders.forEach(function(o){
-      var kw=getVariantKeyword(o.itemName),gk=kw||o.itemName;
-      if(!gmap[gk]){gmap[gk]={label:kw||o.itemName,isVariant:!!kw,rows:[]};gorder.push(gk);}
-      gmap[gk].rows.push(o);
-    });
-    gorder.forEach(function(gk){
-      gmap[gk].rows.sort(function(a,b){return parseFloat(a.custCode)-parseFloat(b.custCode);});
-    });
-
-    var isOpen = store('get','hist_open_'+k)==='1';
-
-    var cards = gorder.map(function(gk){
-      var g=gmap[gk];
-      var isTotalOnly = g.rows.length>0 && TOTAL_ONLY_GROUPS.indexOf(Number(g.rows[0].itemCode))!==-1;
-      var storeRows;
-      if(isTotalOnly){
-        var totalQty=0,unit='';
-        g.rows.forEach(function(o){totalQty+=parseFloat(o.qty)||0;if(!unit)unit=o.unit;});
-        storeRows='<div class="store-row" style="justify-content:center;padding:16px">'+
-          '<div style="text-align:center"><div class="store-qty" style="font-size:28px">'+fmtQty(totalQty)+'</div>'+
-          '<div class="store-unit">'+esc(unit)+'</div></div></div>';
-      } else {
-        storeRows=g.rows.map(function(o){
-          return '<div style="display:grid;grid-template-columns:60px 1fr auto;align-items:center;padding:10px 16px;border-bottom:1px solid #f8fafc">'+
-            '<div style="padding-right:12px;border-right:2px solid #e8eef6;text-align:center">'+
-            '  <div style="font-size:22px;font-weight:900;color:var(--navy)">'+esc(o.custCode)+'</div>'+
-            (g.isVariant?'<div style="font-size:10px;color:#b0bac4;margin-top:2px">'+esc(o.itemName)+'</div>':'')+
-            '</div>'+
-            '<div></div>'+
-            '<div style="padding-left:12px;border-left:2px solid #e8eef6;text-align:center">'+
-            '  <div style="font-size:22px;font-weight:900;color:var(--navy)">'+fmtQty(o.qty)+'</div>'+
-            '  <div style="font-size:12px;color:var(--gray)">'+esc(o.unit)+'</div>'+
-            '</div>'+
-            '</div>';
-        }).join('');
-      }
-      return '<div class="product-card" style="margin-bottom:8px">'+
-        '<div class="product-card-header"><div class="product-name">'+esc(g.label)+'</div></div>'+
-        storeRows+'</div>';
-    }).join('');
-
-    return '<div style="margin-bottom:18px">'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 4px">'+
-      '  <div style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1" onclick="toggleHistKey(\''+k+'\')">'+
-      '    <div style="font-size:14px;font-weight:700;color:var(--navy)">📅 '+dateStr+'</div>'+
-      '    <span style="font-size:12px;color:var(--gray)">'+orders.length+'件</span>'+
-      '    <span id="harr_'+k+'" style="font-size:11px;color:#aaa;transition:transform .2s'+(isOpen?';transform:rotate(180deg)':'')+'">▾</span>'+
-      '  </div>'+
-      '  <button onclick="deleteHistDay(\''+k+'\')" style="font-size:11px;color:var(--red);background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:4px 10px;font-family:inherit;cursor:pointer">🗑</button>'+
-      '</div>'+
-      '<div id="hbody_'+k+'" style="display:'+(isOpen?'block':'none')+'">'+cards+'</div>'+
-      '</div>';
-  }).join('');
-
-  el.innerHTML = clearAllBtn + daysHtml;
-}
-
-function deleteHistDay(k){
-  var dateStr = k.replace('snap_','').replace(/-/g,'/');
-  if(!confirm(dateStr + ' の履歴を削除しますか？')) return;
-  localStorage.removeItem(k);
-  localStorage.removeItem('batches_'+k);
-  localStorage.removeItem('batchnum_'+k);
-  localStorage.removeItem('hist_open_'+k);
-  renderHistoryList();
-  showToast('削除しました');
-}
-
-function clearAllHistory(){
-  if(!confirm('全ての履歴を削除しますか？\nこの操作は元に戻せません。')) return;
-  var today = todayKey();
-  var toRemove = [];
-  for(var i=0;i<localStorage.length;i++){
-    var k=localStorage.key(i);
-    if(k&&k.match(/^snap_\d{4}-\d{2}-\d{2}$/)&&k!==today) toRemove.push(k);
-  }
-  toRemove.forEach(function(k){
-    localStorage.removeItem(k);
-    localStorage.removeItem('batches_'+k);
-    localStorage.removeItem('batchnum_'+k);
-    localStorage.removeItem('hist_open_'+k);
-  });
-  renderHistoryList();
-  showToast('全履歴を削除しました');
-}
-
-function toggleHistKey(k){
-  var body=document.getElementById('hbody_'+k);
-  var arr=document.getElementById('harr_'+k);
-  var open=body.style.display==='none';
-  body.style.display=open?'block':'none';
-  arr.style.transform=open?'rotate(180deg)':'';
-  store('set','hist_open_'+k,open?'1':'0');
-}
-
-// ══════════════════════════════════════════════════════════════
 // ADMIN VIEW — shiire_app スタイル
 // ══════════════════════════════════════════════════════════════
 
@@ -1399,20 +1214,20 @@ function renderAdmin(syncDate) {
   var groups = Object.keys(groupSet).map(Number).filter(Boolean).sort(function(a,b){return a-b;});
 
   var tabBar = document.getElementById('admin-tab-bar');
-  tabBar.innerHTML = groups.concat(['ichiran']).map(function(c){
-    var lbl = c==='ichiran' ? '📋 一覧' : (CODE_LABELS[c]||'コード'+c);
+  tabBar.innerHTML = groups.map(function(c){
+    var lbl = CODE_LABELS[c]||'コード'+c;
     var isFirst = (c === groups[0]);
     return '<button class="tab-item'+(isFirst?' active':'')+'" data-code="'+c+'" onclick="selectAdminGroup(\''+c+'\')">'+lbl+'</button>';
   }).join('');
 
-  currentGroup = groups[0] || 'ichiran';
+  currentGroup = groups[0];
   renderAdminCmtBanner();
   renderAdminList();
 }
 
 function renderAdminCmtBanner() {
   var cmtEl = document.getElementById('admin-comment-area');
-  if (!cmtEl || currentGroup === 'ichiran') {
+  if (!cmtEl || !currentGroup) {
     if (cmtEl) cmtEl.innerHTML = '';
     return;
   }
@@ -1446,11 +1261,7 @@ function selectAdminGroup(code) {
     b.classList.toggle('active', String(b.dataset.code)===String(code));
   });
   renderAdminCmtBanner();
-  if (code === 'ichiran') {
-    renderIchiran('');
-  } else {
-    renderAdminList();
-  }
+  renderAdminList();
 }
 
 function renderAdminList() {
@@ -1537,7 +1348,7 @@ function renderAdminList() {
       '<div class="s-fish-summary">'+active.length+'店舗'+(deleted.length>0?' · '+deleted.length+'件削除済':'')+
       (currentGroup==='all'?' · '+(CODE_LABELS[Number(g.rows[0].o.itemCode)]||''):'')+'</div></div>'+
       '<span class="s-fish-arrow" id="arr_'+cid+'">▾</span></div>'+
-      '<div class="s-fish-body" id="body_'+cid+'">'+
+      '<div class="s-fish-body" id="body_'+cid+'">'+ 
       '<div class="s-store-list">'+storeRows+delRows+'</div></div></div>';
   }).join('');
 }
@@ -1591,8 +1402,8 @@ function buildAdminStoreRow(r) {
     '<div class="s-field" style="margin-bottom:12px"><label>コメント</label>'+
     '<input type="text" id="acmt_'+key+'" value="'+esc(r.comment)+'" placeholder="コメントを入力..." style="font-size:14px;padding:9px 11px"></div>'+
     '<div class="s-btn-row">'+
-    '<button class="s-btn-lock" onclick="saveAdminRow(\''+key+'\')">💾 保存</button>'+
-    '<button class="s-btn-unlock" style="display:flex;background:#fee2e2;color:#dc2626;border-color:#fca5a5" onclick="deleteAdminRow(\''+key+'\')">🗑 削除</button>'+
+    '<button style="flex:1;padding:11px;background:var(--green);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer" onclick="saveAdminRow(\''+key+'\')">💾 保存</button>'+
+    '<button style="display:flex;align-items:center;padding:11px 16px;background:#fee2e2;color:#dc2626;border:1.5px solid #fca5a5;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer" onclick="deleteAdminRow(\''+key+'\')">🗑 削除</button>'+
     '</div></div></div>';
 }
 
@@ -1664,98 +1475,6 @@ function restoreAdminRow(key){
   renderAdminList();
 }
 
-function renderIchiran(searchTerm) {
-  var el   = document.getElementById('admin-list');
-  var cmtEl= document.getElementById('admin-comment-area');
-  cmtEl.innerHTML = '';
-
-  // 検索ボックスはDOMを壊さず保持（キーボードが閉じないように）
-  var searchBox = document.getElementById('ichiran-search-box');
-  if (!searchBox) {
-    el.innerHTML =
-      '<div id="ichiran-search-box" style="background:white;border-radius:11px;border:1.5px solid var(--border);display:flex;align-items:center;gap:8px;padding:10px 14px;margin-bottom:14px;box-shadow:var(--shadow-sm)">'+
-      '<span style="font-size:16px">🔍</span>'+
-      '<input type="search" id="ichiran-search-input" placeholder="店舗名・商品名・コードで検索..." '+
-      'oninput="filterIchiran(this.value)" '+
-      'style="flex:1;border:none;outline:none;font-size:14px;font-family:inherit;color:var(--navy);background:transparent">'+
-      '</div>'+
-      '<div id="ichiran-results"></div>';
-  }
-  filterIchiran(searchTerm || '');
-  // 検索ボックスに値をセット
-  var inp = document.getElementById('ichiran-search-input');
-  if (inp && searchTerm !== undefined) inp.value = searchTerm;
-}
-
-function filterIchiran(kw) {
-  var el = document.getElementById('ichiran-results');
-  if (!el) return;
-  kw = (kw||'').trim().toLowerCase();
-  adminEdits = JSON.parse(store('get','admin_edits_'+todayKey())||'{}');
-
-  var allSorted = todayOrders.slice().sort(function(a,b){
-    return parseFloat(a.custCode)-parseFloat(b.custCode);
-  });
-
-  var rows = allSorted.filter(function(o){
-    if(!kw) return true;
-    var sname=(getShortName(o.custCode)||o.custName||'').toLowerCase();
-    var iname=(o.itemName||'').toLowerCase();
-    var code =String(o.custCode).toLowerCase();
-    return sname.indexOf(kw)!==-1||iname.indexOf(kw)!==-1||code.indexOf(kw)!==-1;
-  });
-
-  if(rows.length===0){
-    el.innerHTML='<div class="empty"><div class="eicon">🔍</div><p>該当なし</p></div>';
-    return;
-  }
-
-  // Group by store
-  var storeGroups=[],storeMap={};
-  rows.forEach(function(o){
-    var k=String(o.custCode);
-    if(!storeMap[k]){
-      storeMap[k]={code:o.custCode,name:getShortName(o.custCode)||o.custName,items:[]};
-      storeGroups.push(storeMap[k]);
-    }
-    var edit=(adminEdits||{})[orderKey(todayOrders.indexOf(o),o)]||{};
-    var qty  =edit.qty  !==undefined?edit.qty  :o.qty;
-    var unit =edit.unit !==undefined?edit.unit :o.unit;
-    var deleted=!!edit.deleted||!!getGasDeleted()[orderFingerprint(o)];
-    var bInfo=getBatchInfo(o);
-    storeMap[k].items.push({o:o,qty:qty,unit:unit,deleted:deleted,bInfo:bInfo});
-  });
-
-  var storeCards=storeGroups.map(function(sg){
-    var itemRows=sg.items.map(function(it){
-      var deleted=it.deleted,bInfo=it.bInfo;
-      var leftBorder=bInfo?'border-left:3px solid '+(bInfo.b===1?'#f59e0b':bInfo.b===2?'#0ea5e9':'#8b5cf6')+';':'';
-      var grpLbl=CODE_LABELS[Number(it.o.itemCode)]||('コード'+it.o.itemCode);
-      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid #f8fafc;'+(deleted?'opacity:.4;background:#fff5f5;':'background:white;')+leftBorder+'">'+
-        '<div style="flex:1;min-width:0">'+
-        '<div style="font-size:14px;font-weight:700;color:var(--navy)'+(deleted?';text-decoration:line-through;color:#aaa':'')+'">' +esc(it.o.itemName)+'</div>'+
-        '<div style="font-size:11px;color:#94a3b8;margin-top:2px">'+esc(grpLbl)+
-        (it.o.comment?' · 📌'+esc(it.o.comment):'')+
-        (deleted?' · <span style="color:#ef4444">キャンセル</span>':'')+
-        '</div></div>'+
-        '<div style="text-align:right;flex-shrink:0;margin-left:12px">'+
-        '<div style="font-size:20px;font-weight:900;color:var(--navy)'+(deleted?';text-decoration:line-through;color:#aaa':'')+'">'+fmtQty(it.qty)+'</div>'+
-        '<div style="font-size:12px;color:var(--gray)">'+esc(it.unit)+'</div>'+
-        '</div></div>';
-    }).join('');
-    return '<div style="background:white;border-radius:14px;border:1.5px solid var(--border);margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow-sm)">'+
-      '<div style="background:var(--navy);padding:12px 16px;display:flex;align-items:center;gap:12px">'+
-      '<div style="font-size:26px;font-weight:900;color:white;line-height:1">'+esc(sg.code)+'</div>'+
-      '<div><div style="font-size:14px;font-weight:700;color:white">'+esc(sg.name)+'</div>'+
-      '<div style="font-size:11px;color:rgba(255,255,255,0.5)">'+sg.items.length+'件</div></div>'+
-      '</div>'+itemRows+'</div>';
-  }).join('');
-
-  el.innerHTML = storeCards +
-    '<div style="text-align:center;font-size:11px;color:#aaa;padding:8px">'+rows.length+'件 / '+storeGroups.length+'店舗</div>';
-}
-
-
 // ══════════════════════════════════════════════════════════════
 // 仕入入力 FUNCTIONS
 // ══════════════════════════════════════════════════════════════
@@ -1782,17 +1501,26 @@ function selectShiirePrefix(prefix){
 function reloadShiire(){ shiireLoaded=false; shiireCurrentPrefix=null; initShiireTab(); }
 
 async function loadShiireData(){
+  var panelId = isAdmin ? 'admin-shiire-panel' : 'panel-shiire';
+  var panel = document.getElementById(panelId);
+  if(panel) panel.innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--gray)"><div style="font-size:32px;margin-bottom:12px">⏳</div><p style="font-size:13px">読み込み中...</p></div>';
   showLoading('仕入データを読み込み中...');
   try{
     var url=SHIIRE_GAS_URL+'?action=readAll&sheetId='+encodeURIComponent(SHIIRE_SHEET_ID)+'&sheetName='+encodeURIComponent(shiireSheet);
     var res=await fetch(url);
     var json=await res.json();
-    if(json.error){showToast('エラー: '+json.error,'error');hideLoading();return;}
+    if(json.error){
+      if(panel) panel.innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--red)"><div style="font-size:32px;margin-bottom:12px">⚠️</div><p style="font-size:13px">'+esc(json.error)+'</p><button onclick="reloadShiire()" style="margin-top:12px;padding:10px 20px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer">🔄 再試行</button></div>';
+      hideLoading();return;
+    }
     shiireData={};
     (json.rows||[]).forEach(function(r){if(!shiireData[r.name])shiireData[r.name]=[];shiireData[r.name].push(r);});
     shiireLoaded=true;
     renderShiireList();
-  }catch(e){showToast('通信エラー: '+e.message,'error');}
+  }catch(e){
+    if(panel) panel.innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--red)"><div style="font-size:32px;margin-bottom:12px">⚠️</div><p style="font-size:13px">通信エラー: '+esc(e.message)+'</p><button onclick="reloadShiire()" style="margin-top:12px;padding:10px 20px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer">🔄 再試行</button></div>';
+    showToast('通信エラー: '+e.message,'error');
+  }
   hideLoading();
 }
 
@@ -1856,7 +1584,13 @@ function renderShiireList(){
     if(pa!==pb)return pa-pb;
     return (kwa||a).localeCompare(kwb||b,'ja');
   });
-  if(names.length===0){el.innerHTML=hdr+tabBarHtml+'<div class="empty"><div class="eicon">📋</div><p>データがありません</p></div>';return;}
+  if(names.length===0){
+    var debugMsg = prefix
+      ? 'プレフィックス「'+esc(prefix)+'」のデータが見つかりません<br><small style="color:#aaa">シートに「'+esc(prefix)+'」で始まる行があるか確認してください</small>'
+      : 'データがありません';
+    el.innerHTML=hdr+tabBarHtml+'<div class="empty"><div class="eicon">📋</div><p>'+debugMsg+'</p></div>';
+    return;
+  }
   var rendered={},cards=[];
   names.forEach(function(fn){
     var gkw=null;
@@ -1869,6 +1603,14 @@ function renderShiireList(){
     }
   });
   el.innerHTML=hdr+tabBarHtml+cards.join('');
+  setTimeout(function(){
+    el.querySelectorAll('[data-autodefault="1"]').forEach(function(inp){
+      var fn2=inp.getAttribute('data-fn');
+      var idx2=parseInt(inp.getAttribute('data-idx'));
+      var key2=inp.id.replace('f_','');
+      schSave(fn2,idx2,key2);
+    });
+  },100);
 }
 
 function buildFishCard(fn){
@@ -1908,10 +1650,10 @@ function buildStoreRow(fn,idx,s,showVariant){
     '<div><div class="s-store-name-text">'+esc(s.code)+' '+esc(sname)+vtag+'</div>'+
     (s.unit?'<div style="font-size:11px;color:#94a3b8">'+esc(s.unit)+'</div>':'')+
     '</div><span id="badge_'+key+'" class="s-store-badge '+(filled?'badge-filled':'badge-empty')+'">'+(filled?'✓ 入力済':'未入力')+'</span></div>'+
-    '<div class="s-input-area" id="area_'+key+'">'+
+    '<div class="s-input-area open" id="area_'+key+'">'+
     '<div class="s-input-grid" style="grid-template-columns:1fr 1fr 1fr">'+
     '<div class="s-field"><label>数量 (F列)</label>'+
-    '<input type="number" id="f_'+key+'" value="'+esc(s.qty||'')+'" inputmode="decimal" oninput="schSave(\''+fn+'\','+idx+',\''+key+'\')"></div>'+
+    (function(){var isDefault=(s.qty===''||s.qty===null||s.qty===undefined)&&fn.startsWith(CODE_TO_PREFIX[100]);var val=s.qty!==''&&s.qty!=null?s.qty:(isDefault?'5':'');return '<input type="number" id="f_'+key+'" value="'+esc(val)+'" inputmode="decimal"'+(isDefault?' data-autodefault="1" data-fn="'+esc(fn)+'" data-idx="'+idx+'"':'')+' oninput="schSave(\''+fn+'\','+idx+',\''+key+'\')">';})()+'</div>'+
     '<div class="s-field"><label>単価 (H列)</label>'+
     '<input type="number" id="h_'+key+'" value="'+esc(s.price||'')+'" inputmode="decimal" placeholder="同じ価格はここへ" oninput="schSave(\''+fn+'\','+idx+',\''+key+'\')">'+
     '<div style="font-size:10px;color:#aaa;margin-top:3px">全商品同価格の場合</div></div>'+
@@ -1919,10 +1661,7 @@ function buildStoreRow(fn,idx,s,showVariant){
     '<input type="number" id="i_'+key+'" value="'+esc(s.shiirePrice||'')+'" inputmode="decimal" placeholder="個別価格はここへ" oninput="schSave(\''+fn+'\','+idx+',\''+key+'\')">'+
     '<div style="font-size:10px;color:#aaa;margin-top:3px">この商品のみ異なる場合</div></div>'+
     '</div>'+
-    '<div class="s-btn-row">'+
-    '<button class="s-btn-lock" id="sbtn_'+key+'" onclick="sLock(\''+fn+'\','+idx+',\''+key+'\')">✓ 確認・ロック</button>'+
-    '<button class="s-btn-unlock" id="ubtn_'+key+'" onclick="sUnlock(\''+key+'\')">🔓 解除</button>'+
-    '</div><div class="s-save-msg" id="msg_'+key+'"></div></div></div>';
+    '<div class="s-save-msg" id="msg_'+key+'"></div></div></div>';
 }
 
 function toggleFC(cid){
@@ -1941,10 +1680,13 @@ function toggleSR(key){
 
 function schSave(fn,idx,key){
   clearTimeout(shiireTimers[key]);
-  shiireTimers[key]=setTimeout(function(){doSSave(fn,idx,key,false);},800);
+  var m=document.getElementById('msg_'+key);
+  if(m){m.textContent='⏳ 保存中...';m.className='s-save-msg';}
+  shiireTimers[key]=setTimeout(function(){doSSave(fn,idx,key);},400);
 }
 
-async function doSSave(fn,idx,key,showMsg){
+async function doSSave(fn,idx,key){
+  clearTimeout(shiireTimers[key]);
   var s=shiireData[fn]&&shiireData[fn][idx];
   if(!s)return;
   var fv=document.getElementById('f_'+key).value||'';
@@ -1955,32 +1697,14 @@ async function doSSave(fn,idx,key,showMsg){
     var json=await res.json();
     if(json.success){
       s.qty=fv; s.price=hv; s.shiirePrice=iv;
-      if(showMsg){
-        var m=document.getElementById('msg_'+key);if(m){m.textContent='✓ 保存しました';m.className='s-save-msg ok';}
-        var b=document.getElementById('badge_'+key);if(b){b.textContent='✓ 入力済';b.className='s-store-badge badge-filled';}
-        var r=document.getElementById('row_'+key);if(r)r.classList.add('filled');
-      }
+      var m=document.getElementById('msg_'+key);
+      if(m){m.textContent='✓ 保存';m.className='s-save-msg ok';}
+      var b=document.getElementById('badge_'+key);if(b){b.textContent='✓ 入力済';b.className='s-store-badge badge-filled';}
+      var r=document.getElementById('row_'+key);if(r)r.classList.add('filled');
+    }else{
+      var m=document.getElementById('msg_'+key);if(m){m.textContent='エラー';m.className='s-save-msg err';}
     }
-  }catch(e){if(showMsg){var m=document.getElementById('msg_'+key);if(m){m.textContent='通信エラー';m.className='s-save-msg err';}}}
-}
-
-async function sLock(fn,idx,key){
-  await doSSave(fn,idx,key,true);
-  var area=document.getElementById('area_'+key);
-  if(area)area.querySelectorAll('input').forEach(function(inp){inp.readOnly=true;inp.style.background='#f1f8e9';inp.style.color='#555';});
-  var r=document.getElementById('row_'+key);if(r)r.classList.add('locked');
-  var sb=document.getElementById('sbtn_'+key);if(sb)sb.style.display='none';
-  var ub=document.getElementById('ubtn_'+key);if(ub)ub.style.display='block';
-  showToast('ロックしました ✓','success');
-}
-
-function sUnlock(key){
-  var area=document.getElementById('area_'+key);
-  if(area)area.querySelectorAll('input').forEach(function(inp){inp.readOnly=false;inp.style.background='';inp.style.color='';});
-  var r=document.getElementById('row_'+key);if(r)r.classList.remove('locked');
-  var sb=document.getElementById('sbtn_'+key);if(sb)sb.style.display='';
-  var ub=document.getElementById('ubtn_'+key);if(ub)ub.style.display='none';
-  showToast('ロック解除しました');
+  }catch(e){var m=document.getElementById('msg_'+key);if(m){m.textContent='通信エラー';m.className='s-save-msg err';}}
 }
 
 // ══════════════════════════════════════════════════════════════
