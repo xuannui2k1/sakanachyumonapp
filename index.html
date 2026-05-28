@@ -717,7 +717,10 @@ var shiireTimers    = {};
 // ══════════════════════════════════════════════════════════════
 (function init() {
   var code = store('get','gas_code') || '';
-  if (code) document.getElementById('login-code').value = code;
+  if (code) {
+    document.getElementById('login-code').value = code;
+    doLogin();
+  }
 })();
 
 // ══════════════════════════════════════════════════════════════
