@@ -434,6 +434,9 @@ body{font-family:-apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-seri
   font-style:italic
 }
 .store-qty.cancelled{text-decoration:line-through;color:#aaa}
+.stock-adj{
+  font-size:11px;color:var(--red);margin-top:3px;font-weight:700
+}
 /* ══════════════════════════════════════════════════════════════
    仕入入力 TAB
 ══════════════════════════════════════════════════════════════ */
@@ -510,7 +513,7 @@ body{font-family:-apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-seri
       <div class="header-title" id="header-title">─</div>
       <div class="header-sub" id="header-sub">─</div>
     </div>
-    <button class="btn-reload" id="btn-reload" onclick="loadData()">🔄 更新</button>
+    <button class="btn-reload" id="btn-reload" onclick="onReloadClick()">🔄 更新</button>
     <button class="btn-reload" id="btn-url-settings" style="display:none" onclick="openUrlSettings()">⚙️</button>
   </div>
 
@@ -540,12 +543,12 @@ body{font-family:-apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-seri
   <div id="admin-view" style="display:none;flex-direction:column;flex:1">
     <!-- Admin main tabs: 注文確認 | 仕入入力 -->
     <div class="tab-bar" id="admin-main-tab-bar">
-      <button class="tab-item active" id="admin-main-tab-orders" onclick="switchAdminMainTab('orders')" style="flex:1">📋 注文確認</button>
-      <button class="tab-item" id="admin-main-tab-shiire" onclick="switchAdminMainTab('shiire')" style="flex:1">💴 仕入入力</button>
+      <button class="tab-item active" id="admin-main-tab-shiire" onclick="switchAdminMainTab('shiire')" style="flex:1">💴 仕入入力</button>
+      <button class="tab-item" id="admin-main-tab-orders" onclick="switchAdminMainTab('orders')" style="flex:1">📋 注文確認</button>
     </div>
 
     <!-- 注文確認 section -->
-    <div id="admin-orders-section" style="display:flex;flex-direction:column;flex:1">
+    <div id="admin-orders-section" style="display:none;flex-direction:column;flex:1">
       <div class="tab-bar" id="admin-tab-bar" style="overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none"></div>
       <div class="content">
         <div id="admin-new-banner" style="display:none"></div>
@@ -556,7 +559,7 @@ body{font-family:-apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-seri
     </div>
 
     <!-- 仕入入力 section -->
-    <div id="admin-shiire-section" style="display:none;flex:1;overflow-y:auto">
+    <div id="admin-shiire-section" style="display:flex;flex-direction:column;flex:1;overflow-y:auto">
       <div class="content">
         <div id="admin-shiire-panel"></div>
       </div>
@@ -694,6 +697,7 @@ var currentGroup = 'all';
 var noteTargetKey= '';
 var noteTargetIdx= -1;
 var groupComments= {}; // { code: { text, time } }
+var stockAdjusted= {}; // { fingerprint: { from, to } } — 在庫調整された注文
 
 // ══════════════════════════════════════════════════════════════
 // 仕入入力 CONSTANTS
@@ -763,7 +767,39 @@ function saveUrlSettings() {
 // ══════════════════════════════════════════════════════════════
 // FETCH DATA
 // ══════════════════════════════════════════════════════════════
+var adminOrdersLoaded = false;
+
+function onReloadClick() {
+  if (isAdmin) {
+    // 管理者：開いているタブだけ更新
+    if (adminCurrentTab === 'shiire') {
+      reloadShiire();
+    } else {
+      loadOrdersData();
+    }
+  } else {
+    loadOrdersData();
+  }
+}
+
 function loadData() {
+  // 管理者(999)は注文データを即取得せず、まず仕入入力タブを表示（遅延読込）
+  if (isAdmin) {
+    document.getElementById('setup-screen').style.display = 'none';
+    document.getElementById('app-screen').style.display   = 'flex';
+    document.getElementById('header-title').textContent   = '管理者画面';
+    document.getElementById('header-sub').textContent     = getDateStr();
+    document.getElementById('partner-view').style.display = 'none';
+    document.getElementById('admin-view').style.display   = 'flex';
+    // 仕入入力タブを先頭に表示
+    switchAdminMainTab('shiire');
+    return;
+  }
+  loadOrdersData();
+}
+
+// 注文確認データの取得（partner は即時、admin はタブ初回タップ時）
+function loadOrdersData() {
   var reloadBtn = document.getElementById('btn-reload');
   reloadBtn.classList.add('spinning');
   showLoading('データを取得中...');
@@ -817,11 +853,16 @@ function loadData() {
     document.getElementById('setup-screen').style.display = 'none';
     document.getElementById('app-screen').style.display   = 'flex';
 
-    if (isAdmin) {
-      renderAdmin(json.syncDate || '');
-    } else {
-      renderPartner(json.syncDate || '');
-    }
+    var syncDateStr = json.syncDate || '';
+    // 在庫がある注文を自動キャンセル → 完了後に描画
+    autoCancelByStock().then(function(){
+      if (isAdmin) {
+        adminOrdersLoaded = true;
+        renderAdmin(syncDateStr);
+      } else {
+        renderPartner(syncDateStr);
+      }
+    });
   })
   .catch(function(e){
     hideLoading();
@@ -832,6 +873,81 @@ function loadData() {
 
 function getGasDeleted() {
   return JSON.parse(store('get','gas_deleted_'+todayKey()) || '{}');
+}
+
+// ══════════════════════════════════════════════════════════════
+// 在庫による自動キャンセル / 数量調整
+// 在庫管理（A列=商品名, B列=残数）を読み、商品名が完全一致する注文を
+// custCode 昇順で在庫を引き当てていく：
+//   ・在庫 ≥ 注文数量 → その注文をキャンセル（markDeleted）、在庫を減らす
+//   ・在庫 < 注文数量 だが在庫 > 0 → 注文数量を（注文数量−在庫）に減らして表示
+//     （アプリ表示のみ。元シートには書き込まない）
+//   ・在庫 = 0 → 以降の注文はそのまま
+// ══════════════════════════════════════════════════════════════
+function autoCancelByStock() {
+  return fetch(gasUrl + '?action=getStock')
+    .then(function(r){ return r.json(); })
+    .then(function(js){
+      if (!js || !js.success || !js.stock) return;
+
+      // 商品名 → 在庫数（完全一致）
+      var stockMap = {};
+      js.stock.forEach(function(s){
+        var nm = String(s.name || '').trim();
+        if (nm) stockMap[nm] = parseFloat(s.qty) || 0;
+      });
+
+      // 在庫がある商品名ごとに、対象注文を custCode 昇順で集める
+      var byName = {};
+      todayOrders.forEach(function(o, i){
+        var nm = String(o.itemName || '').trim();
+        if (!(nm in stockMap)) return;
+        if (!byName[nm]) byName[nm] = [];
+        byName[nm].push({ o: o, i: i });
+      });
+
+      var deleted = getGasDeleted();
+      var ds = todayKey().replace('snap_','');
+      var pending = [];
+      var changed = false;
+      stockAdjusted = {};  // 数量調整された注文（fingerprint → {from,to}）をリセット
+
+      Object.keys(byName).forEach(function(nm){
+        var remain = stockMap[nm];
+        var list = byName[nm].sort(function(a, b){
+          return (parseFloat(a.o.custCode) || 0) - (parseFloat(b.o.custCode) || 0);
+        });
+        list.forEach(function(entry){
+          var o = entry.o;
+          if (remain <= 0) return;                       // 在庫切れ → そのまま
+          var orderQty = parseFloat(o.qty) || 0;
+          if (orderQty <= 0) return;
+          if (remain >= orderQty) {
+            // 全量在庫あり → キャンセル
+            remain -= orderQty;
+            var fp = orderFingerprint(o);                // 元の数量で fingerprint
+            if (!deleted[fp]) {
+              deleted[fp] = true;
+              changed = true;
+              pending.push(
+                fetch(gasUrl + '?action=markDeleted&fp=' + encodeURIComponent(fp) + '&date=' + encodeURIComponent(ds))
+                  .catch(function(){})
+              );
+            }
+          } else {
+            // 一部だけ在庫あり → 注文数量を不足分に減らす（表示のみ）
+            var origQty = orderQty;
+            o.qty = orderQty - remain;
+            stockAdjusted[orderFingerprint(o)] = { from: origQty, to: o.qty };
+            remain = 0;
+          }
+        });
+      });
+
+      if (changed) store('set','gas_deleted_'+todayKey(), JSON.stringify(deleted));
+      return Promise.all(pending);
+    })
+    .catch(function(){ /* 在庫取得失敗時は何もしない（通常通り表示） */ });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1116,13 +1232,16 @@ function buildProductCard(group) {
       var timeBadge = (!cancelled && bInfo) ? '<span class="new-time">' + bInfo.t + '</span>' : '';
       var cancelMsg = cancelled
         ? '<div class="cancelled-msg">大変申し訳ございません。こちらの注文はキャンセルとなりました。</div>' : '';
+      var adj       = stockAdjusted[fp];
+      var adjBadge  = (!cancelled && adj)
+        ? '<div class="stock-adj">在庫調整：'+fmtQty(adj.from)+' → '+fmtQty(adj.to)+'</div>' : '';
       var shortName = getShortName(o.custCode);
       return [
         '<div class="store-row' + batchCls + '">',
         '  <div class="store-code-block">',
         '    <div class="store-code">' + esc(o.custCode) + '</div>',
         '    <div class="store-name-short">' + esc(shortName || o.custName) + '</div>',
-        timeBadge, cancelMsg,
+        timeBadge, cancelMsg, adjBadge,
         '  </div>',
         '  <div class="store-mid">' + (isVariant ? esc(o.itemName) : '') + '</div>',
         '  <div class="store-qty-block">',
@@ -1387,11 +1506,14 @@ function buildAdminStoreRow(r) {
   var sname= getShortName(r.o.custCode)||r.o.custName;
   var bInfo= getBatchInfo(r.o);
   var bCls = bInfo ? ' is-new-'+bInfo.b : '';
+  var adj  = stockAdjusted[orderFingerprint(r.o)];
+  var adjBadge = adj ? '<div style="font-size:11px;color:#dc2626;font-weight:700;margin-top:2px">在庫調整：'+fmtQty(adj.from)+' → '+fmtQty(adj.to)+'</div>' : '';
   return '<div class="s-store-row'+bCls+'" id="arow_'+key+'">'+
     '<div class="s-store-header" onclick="toggleASR(\''+key+'\')">'+
     '<div>'+
     '<div class="s-store-name-text">'+esc(r.o.custCode)+' '+esc(sname)+'</div>'+
     '<div style="font-size:12px;color:#64748b;margin-top:2px">'+fmtQty(r.qty)+' '+esc(r.unit)+'</div>'+
+    adjBadge+
     (r.comment?'<div style="font-size:11px;color:#f59e0b;margin-top:2px">📌 '+esc(r.comment)+'</div>':'')+
     (bInfo?'<div class="new-time">'+bInfo.t+'</div>':'')+
     '</div>'+
@@ -1518,6 +1640,8 @@ async function loadShiireData(){
     }
     shiireData={};
     (json.rows||[]).forEach(function(r){if(!shiireData[r.name])shiireData[r.name]=[];shiireData[r.name].push(r);});
+    // 送信待ちの入力を新しいデータに上書き反映（番号が消えないように）
+    applyQueueOverlay();
     shiireLoaded=true;
     renderShiireList();
   }catch(e){
@@ -1533,11 +1657,18 @@ function switchAdminMainTab(tab) {
   document.getElementById('admin-orders-section').style.display = tab==='orders' ? 'flex' : 'none';
   document.getElementById('admin-shiire-section').style.display = tab==='shiire' ? 'flex' : 'none';
   document.getElementById('admin-shiire-section').style.flexDirection = 'column';
+  adminCurrentTab = tab;
+  if(tab==='orders'){
+    // 注文確認は初回タップ時のみ読込（遅延読込）
+    if(!adminOrdersLoaded) loadOrdersData();
+  }
   if(tab==='shiire'){
     if(!shiireLoaded) initShiireTab();
     else renderShiireList();
   }
 }
+
+var adminCurrentTab = 'shiire';
 
 var shiireCurrentPrefix = null; // null = 全て
 
@@ -1579,7 +1710,8 @@ function renderShiireList(){
     '<div><div style="font-size:13px;font-weight:700;color:var(--navy)">'+esc(shiireSheet)+'</div>'+
     '<div style="font-size:11px;color:var(--gray)">本日の仕入入力</div></div>'+
     '<button onclick="reloadShiire()" style="font-size:12px;color:var(--navy);background:#eef3fb;border:1px solid #c5d8f0;border-radius:8px;padding:7px 12px;font-family:inherit;font-weight:700;cursor:pointer">🔄 再読込</button>'+
-  '</div>';
+  '</div>'+
+  '<div id="shiire-queue-bar" style="display:none;justify-content:space-between;align-items:center;background:#fffbeb;border:1px solid var(--amber-border);border-radius:11px;padding:10px 14px;margin-bottom:12px"></div>';
   var names=Object.keys(shiireData).filter(function(n){return !prefix||n.startsWith(prefix);}).sort(function(a,b){
     var kwa=null,kwb=null;
     SHIIRE_GROUPED.forEach(function(kw){if(a.indexOf(kw)!==-1&&!kwa)kwa=kw;if(b.indexOf(kw)!==-1&&!kwb)kwb=kw;});
@@ -1606,6 +1738,8 @@ function renderShiireList(){
     }
   });
   el.innerHTML=hdr+tabBarHtml+cards.join('');
+  updateQueueBadge();
+  flushShiireQueue();
   setTimeout(function(){
     el.querySelectorAll('[data-autodefault="1"]').forEach(function(inp){
       var fn2=inp.getAttribute('data-fn');
@@ -1681,6 +1815,59 @@ function toggleSR(key){
   document.getElementById('area_'+key).classList.toggle('open');
 }
 
+// ══════════════════════════════════════════════════════════════
+// 仕入入力 オフラインキュー（電波が弱い／圏外でも入力を保持し、
+// 回線が安定したらGoogle Sheetへ書き込めるまで自動リトライ）
+// ══════════════════════════════════════════════════════════════
+var SHIIRE_QUEUE_KEY = 'shiire_queue_v1';
+
+function getShiireQueue(){
+  try{ return JSON.parse(store('get',SHIIRE_QUEUE_KEY)||'{}'); }catch(e){ return {}; }
+}
+function setShiireQueue(q){ store('set',SHIIRE_QUEUE_KEY, JSON.stringify(q)); }
+
+// 現在のシートで送信待ちの値を shiireData に反映（再読込時に未送信の入力が消えないように）
+function applyQueueOverlay(){
+  var q=getShiireQueue();
+  Object.keys(q).forEach(function(qk){
+    var item=q[qk];
+    if(!item||item.sheetName!==shiireSheet) return;
+    var arr=shiireData[item.fn];
+    var s=arr&&arr[item.idx];
+    // 行番号で照合（fn/idxがずれても row が一致すれば反映）
+    if(!s||s.row!==item.row){
+      s=null;
+      Object.keys(shiireData).forEach(function(nm){
+        shiireData[nm].forEach(function(rr){ if(rr.row===item.row) s=rr; });
+      });
+    }
+    if(s){
+      if(item.f!=null) s.qty=item.f; 
+      if(item.h!=null) s.price=item.h;
+      if(item.i!=null) s.shiirePrice=item.i;
+    }
+  });
+}
+
+function qKeyOf(sheetName,row){ return sheetName+'|'+row; }
+
+// 保留中の件数バッジ表示
+function updateQueueBadge(){
+  var q=getShiireQueue();
+  var n=Object.keys(q).length;
+  var el=document.getElementById('shiire-queue-bar');
+  if(!el) return;
+  if(n>0){
+    el.style.display='flex';
+    var online=navigator.onLine;
+    el.innerHTML='<span style="font-size:13px;font-weight:700;color:#92400e">⏳ 送信待ち '+n+'件</span>'+
+      '<span style="font-size:11px;color:#b45309">'+(online?'送信中…自動で再試行します':'📴 オフライン — 回線復帰後に自動送信')+'</span>';
+  }else{
+    el.style.display='none';
+    el.innerHTML='';
+  }
+}
+
 function schSave(fn,idx,key){
   clearTimeout(shiireTimers[key]);
   var m=document.getElementById('msg_'+key);
@@ -1688,27 +1875,100 @@ function schSave(fn,idx,key){
   shiireTimers[key]=setTimeout(function(){doSSave(fn,idx,key);},400);
 }
 
-async function doSSave(fn,idx,key){
+function doSSave(fn,idx,key){
   clearTimeout(shiireTimers[key]);
   var s=shiireData[fn]&&shiireData[fn][idx];
   if(!s)return;
-  var fv=document.getElementById('f_'+key).value||'';
-  var hv=document.getElementById('h_'+key).value||'';
-  var iv=document.getElementById('i_'+key).value||'';
-  try{
-    var res=await fetch(SHIIRE_GAS_URL,{method:'POST',body:JSON.stringify({action:'write',sheetId:SHIIRE_SHEET_ID,sheetName:shiireSheet,row:s.row,f:fv||null,h:hv||null,i:iv||null}),headers:{'Content-Type':'text/plain'}});
-    var json=await res.json();
-    if(json.success){
-      s.qty=fv; s.price=hv; s.shiirePrice=iv;
-      var m=document.getElementById('msg_'+key);
-      if(m){m.textContent='✓ 保存';m.className='s-save-msg ok';}
-      var b=document.getElementById('badge_'+key);if(b){b.textContent='✓ 入力済';b.className='s-store-badge badge-filled';}
-      var r=document.getElementById('row_'+key);if(r)r.classList.add('filled');
-    }else{
-      var m=document.getElementById('msg_'+key);if(m){m.textContent='エラー';m.className='s-save-msg err';}
-    }
-  }catch(e){var m=document.getElementById('msg_'+key);if(m){m.textContent='通信エラー';m.className='s-save-msg err';}}
+  var fEl=document.getElementById('f_'+key);
+  var hEl=document.getElementById('h_'+key);
+  var iEl=document.getElementById('i_'+key);
+  if(!fEl||!hEl||!iEl)return;
+  var fv=fEl.value||'';
+  var hv=hEl.value||'';
+  var iv=iEl.value||'';
+
+  // 1) ローカル即時反映（画面が再描画・リロードされても消えない）
+  s.qty=fv; s.price=hv; s.shiirePrice=iv;
+
+  // 2) キューに保存（永続化）— 同じ行は最新値で上書き
+  var q=getShiireQueue();
+  q[qKeyOf(shiireSheet,s.row)]={
+    sheetName:shiireSheet, row:s.row,
+    f:fv||null, h:hv||null, i:iv||null,
+    fn:fn, idx:idx, key:key, ts:Date.now()
+  };
+  setShiireQueue(q);
+
+  // 3) バッジ等のUI更新
+  var filled=(fv!==''&&fv!=null);
+  var b=document.getElementById('badge_'+key);
+  if(b){b.textContent=filled?'✓ 入力済':'未入力';b.className='s-store-badge '+(filled?'badge-filled':'badge-empty');}
+  var r=document.getElementById('row_'+key);if(r)r.classList.toggle('filled',filled);
+  var m=document.getElementById('msg_'+key);
+  if(m){m.textContent='⏳ 送信待ち';m.className='s-save-msg';}
+
+  updateQueueBadge();
+
+  // 4) 送信を試みる
+  flushShiireQueue();
 }
+
+var shiireFlushing=false;
+async function flushShiireQueue(){
+  if(shiireFlushing) return;
+  if(!navigator.onLine){ updateQueueBadge(); return; }
+  var q=getShiireQueue();
+  var keys=Object.keys(q);
+  if(keys.length===0){ updateQueueBadge(); return; }
+  shiireFlushing=true;
+  try{
+    for(var idx=0; idx<keys.length; idx++){
+      var qk=keys[idx];
+      var item=q[qk];
+      if(!item) continue;
+      try{
+        var res=await fetch(SHIIRE_GAS_URL,{
+          method:'POST',
+          body:JSON.stringify({action:'write',sheetId:SHIIRE_SHEET_ID,sheetName:item.sheetName,row:item.row,f:item.f,h:item.h,i:item.i}),
+          headers:{'Content-Type':'text/plain'}
+        });
+        var json=await res.json();
+        if(json&&json.success){
+          // 成功 → キューから削除
+          var cur=getShiireQueue();
+          delete cur[qk];
+          setShiireQueue(cur);
+          // 該当行が同じシートで表示中なら ✓保存 を表示
+          if(item.sheetName===shiireSheet){
+            var m=document.getElementById('msg_'+item.key);
+            if(m){m.textContent='✓ 保存';m.className='s-save-msg ok';}
+          }
+        }else{
+          // サーバ側エラー（データ不正など）→ 残して次回リトライ
+          if(item.sheetName===shiireSheet){
+            var m2=document.getElementById('msg_'+item.key);
+            if(m2){m2.textContent='⏳ 送信待ち（再試行）';m2.className='s-save-msg';}
+          }
+        }
+      }catch(e){
+        // 通信失敗（圏外・電波弱）→ このアイテムを残して中断、後で自動リトライ
+        if(item.sheetName===shiireSheet){
+          var m3=document.getElementById('msg_'+item.key);
+          if(m3){m3.textContent='📴 送信待ち';m3.className='s-save-msg';}
+        }
+        break;
+      }
+    }
+  }finally{
+    shiireFlushing=false;
+    updateQueueBadge();
+  }
+}
+
+// 自動リトライ：15秒ごと＋オンライン復帰時
+setInterval(function(){ flushShiireQueue(); }, 15000);
+window.addEventListener('online', function(){ showToast('回線が復帰しました。送信を再開します','success'); flushShiireQueue(); });
+window.addEventListener('offline', function(){ updateQueueBadge(); });
 
 // ══════════════════════════════════════════════════════════════
 // HELPERS
