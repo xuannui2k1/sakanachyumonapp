@@ -825,21 +825,6 @@ function loadOrdersData() {
 
     groupComments = cmtJson.comments || {};
 
-    // デフォルトコメント（未設定の場合のみ自動セット）
-    var DEFAULT_COMMENTS = {
-      '102': 'いつもお世話になっております。\n本日、下記の商品についてはご準備不要です。\n・ホタテ\n・ホタルイカ\n・アカムツ\n担当者が直接お伺いし、その場にて数量・内容を確認・決定いたします。\nご不便をおかけしますが、何卒よろしくお願いいたします。'
-    };
-    var dateStr = todayKey().replace('snap_','');
-    Object.keys(DEFAULT_COMMENTS).forEach(function(code){
-      if (!groupComments[code]) {
-        var text = DEFAULT_COMMENTS[code];
-        fetch(gasUrl+'?action=setGroupComment&code='+encodeURIComponent(code)+'&text='+encodeURIComponent(text)+'&date='+encodeURIComponent(dateStr))
-          .then(function(){
-            groupComments[code] = { text: text, time: pad(new Date().getHours())+':'+pad(new Date().getMinutes()) };
-          }).catch(function(){});
-      }
-    });
-
     // Store deleted fingerprints (from GAS, shared across all devices)
     var deletedFps = {};
     (delJson.deleted || []).forEach(function(fp){ deletedFps[fp] = true; });
@@ -1672,7 +1657,43 @@ var adminCurrentTab = 'shiire';
 
 var shiireCurrentPrefix = null; // null = 全て
 
+// ── 画面チラつき防止 ─────────────────────────────────────────
+// 入力中（数量/単価のinputにフォーカスがある）は再描画を行わない。
+// 再描画はDOMを丸ごと作り直す（innerHTML）ためフォーカス・入力中の
+// 文字が失われ、画面が一瞬ちらつく。入力中に再描画要求が来た場合は
+// pendingに記録し、フォーカスが外れた瞬間にまとめて再描画する。
+var shiireRenderPending = false;
+
+function isEditingShiire(){
+  var a = document.activeElement;
+  if(!a || a.tagName !== 'INPUT' || !a.id) return false;
+  return a.id.charAt(0)==='f' && a.id.charAt(1)==='_'
+      || a.id.charAt(0)==='h' && a.id.charAt(1)==='_'
+      || a.id.charAt(0)==='i' && a.id.charAt(1)==='_';
+}
+
+// 入力欄からフォーカスが外れたら、保留していた再描画を実行
+document.addEventListener('focusout', function(e){
+  var t = e.target;
+  if(!t || t.tagName !== 'INPUT' || !t.id) return;
+  var isShiireInput = (t.id.charAt(1)==='_') &&
+    (t.id.charAt(0)==='f' || t.id.charAt(0)==='h' || t.id.charAt(0)==='i');
+  if(!isShiireInput) return;
+  // フォーカスが別の入力欄へ移った場合は再描画しない（連続入力を妨げない）
+  setTimeout(function(){
+    if(isEditingShiire()) return;          // まだ別のinputを編集中
+    if(shiireRenderPending){
+      shiireRenderPending = false;
+      renderShiireList();
+    }
+  }, 0);
+});
+
 function renderShiireList(){
+  // 入力中はDOMを作り直さない（チラつき・フォーカス喪失を防止）。
+  // 後でフォーカスが外れたタイミングで再描画する。
+  if(isEditingShiire()){ shiireRenderPending = true; return; }
+
   var panelId = isAdmin ? 'admin-shiire-panel' : 'panel-shiire';
   var el = document.getElementById(panelId);
   if(!el) return;
@@ -1790,12 +1811,12 @@ function buildStoreRow(fn,idx,s,showVariant){
     '<div class="s-input-area open" id="area_'+key+'">'+
     '<div class="s-input-grid" style="grid-template-columns:1fr 1fr 1fr">'+
     '<div class="s-field"><label>数量 (F列)</label>'+
-    (function(){var isDefault=(s.qty===''||s.qty===null||s.qty===undefined)&&fn.startsWith(CODE_TO_PREFIX[100]);var val=s.qty!==''&&s.qty!=null?s.qty:(isDefault?'5':'');return '<input type="number" id="f_'+key+'" value="'+esc(val)+'" inputmode="decimal"'+(isDefault?' data-autodefault="1" data-fn="'+esc(fn)+'" data-idx="'+idx+'"':'')+' oninput="schSave(\''+fn+'\','+idx+',\''+key+'\')">';})()+'</div>'+
+    (function(){var isDefault=(s.qty===''||s.qty===null||s.qty===undefined)&&fn.startsWith(CODE_TO_PREFIX[100]);var val=s.qty!==''&&s.qty!=null?s.qty:(isDefault?'5':'');return '<input type="number" id="f_'+key+'" value="'+esc(val)+'" inputmode="decimal"'+(isDefault?' data-autodefault="1" data-fn="'+esc(fn)+'" data-idx="'+idx+'"':'')+' oninput="schDirty(\''+key+'\')" onchange="schSave(\''+fn+'\','+idx+',\''+key+'\')">';})()+'</div>'+
     '<div class="s-field"><label>単価 (H列)</label>'+
-    '<input type="number" id="h_'+key+'" value="'+esc(s.price||'')+'" inputmode="decimal" placeholder="同じ価格はここへ" oninput="schSave(\''+fn+'\','+idx+',\''+key+'\')">'+
+    '<input type="number" id="h_'+key+'" value="'+esc(s.price||'')+'" inputmode="decimal" placeholder="同じ価格はここへ" oninput="schDirty(\''+key+'\')" onchange="schSave(\''+fn+'\','+idx+',\''+key+'\')">'+
     '<div style="font-size:10px;color:#aaa;margin-top:3px">全商品同価格の場合</div></div>'+
     '<div class="s-field"><label>仕入単価 (I列)</label>'+
-    '<input type="number" id="i_'+key+'" value="'+esc(s.shiirePrice||'')+'" inputmode="decimal" placeholder="個別価格はここへ" oninput="schSave(\''+fn+'\','+idx+',\''+key+'\')">'+
+    '<input type="number" id="i_'+key+'" value="'+esc(s.shiirePrice||'')+'" inputmode="decimal" placeholder="個別価格はここへ" oninput="schDirty(\''+key+'\')" onchange="schSave(\''+fn+'\','+idx+',\''+key+'\')">'+
     '<div style="font-size:10px;color:#aaa;margin-top:3px">この商品のみ異なる場合</div></div>'+
     '</div>'+
     '<div class="s-save-msg" id="msg_'+key+'"></div></div></div>';
@@ -1868,11 +1889,17 @@ function updateQueueBadge(){
   }
 }
 
-function schSave(fn,idx,key){
+// 入力中（まだ送信しない）— フォーカスが外れた時に確定送信
+function schDirty(key){
   clearTimeout(shiireTimers[key]);
   var m=document.getElementById('msg_'+key);
-  if(m){m.textContent='⏳ 保存中...';m.className='s-save-msg';}
-  shiireTimers[key]=setTimeout(function(){doSSave(fn,idx,key);},400);
+  if(m){m.textContent='✏️ 入力中…（ほかの欄を押すと保存）';m.className='s-save-msg';}
+}
+
+function schSave(fn,idx,key){
+  clearTimeout(shiireTimers[key]);
+  // onchange は値が確定したタイミングで発火するので即保存
+  doSSave(fn,idx,key);
 }
 
 function doSSave(fn,idx,key){
@@ -1926,13 +1953,24 @@ async function flushShiireQueue(){
       var qk=keys[idx];
       var item=q[qk];
       if(!item) continue;
+      // 送信中マーク（onlineバッジ用）
       try{
-        var res=await fetch(SHIIRE_GAS_URL,{
-          method:'POST',
-          body:JSON.stringify({action:'write',sheetId:SHIIRE_SHEET_ID,sheetName:item.sheetName,row:item.row,f:item.f,h:item.h,i:item.i}),
-          headers:{'Content-Type':'text/plain'}
-        });
-        var json=await res.json();
+        // 20秒でタイムアウト（応答が返らないまま放置→二重送信を防ぐ）
+        var ctrl=new AbortController();
+        var to=setTimeout(function(){ctrl.abort();},20000);
+        var res,json=null;
+        try{
+          res=await fetch(SHIIRE_GAS_URL,{
+            method:'POST',
+            body:JSON.stringify({action:'write',sheetId:SHIIRE_SHEET_ID,sheetName:item.sheetName,row:item.row,f:item.f,h:item.h,i:item.i}),
+            headers:{'Content-Type':'text/plain'},
+            signal:ctrl.signal
+          });
+        }finally{ clearTimeout(to); }
+        // HTTPステータスを確認（GASのエラーHTMLをsuccess扱いしない）
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        var txt=await res.text();
+        try{ json=JSON.parse(txt); }catch(pe){ json=null; }
         if(json&&json.success){
           // 成功 → キューから削除
           var cur=getShiireQueue();
@@ -1941,20 +1979,20 @@ async function flushShiireQueue(){
           // 該当行が同じシートで表示中なら ✓保存 を表示
           if(item.sheetName===shiireSheet){
             var m=document.getElementById('msg_'+item.key);
-            if(m){m.textContent='✓ 保存';m.className='s-save-msg ok';}
+            if(m){m.textContent='✓ 保存しました';m.className='s-save-msg ok';}
           }
         }else{
-          // サーバ側エラー（データ不正など）→ 残して次回リトライ
+          // サーバ側エラー（データ不正・GASエラーページなど）→ 残して次回リトライ
           if(item.sheetName===shiireSheet){
             var m2=document.getElementById('msg_'+item.key);
-            if(m2){m2.textContent='⏳ 送信待ち（再試行）';m2.className='s-save-msg';}
+            if(m2){m2.textContent='⚠️ サーバ応答が不正（再試行します）';m2.className='s-save-msg';}
           }
         }
       }catch(e){
-        // 通信失敗（圏外・電波弱）→ このアイテムを残して中断、後で自動リトライ
+        // 通信失敗・タイムアウト（圏外・電波弱）→ このアイテムを残して中断、後で自動リトライ
         if(item.sheetName===shiireSheet){
           var m3=document.getElementById('msg_'+item.key);
-          if(m3){m3.textContent='📴 送信待ち';m3.className='s-save-msg';}
+          if(m3){m3.textContent='📴 未送信（回線待ち・自動で再試行）';m3.className='s-save-msg';}
         }
         break;
       }
