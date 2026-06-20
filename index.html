@@ -1875,14 +1875,24 @@ function qKeyOf(sheetName,row){ return sheetName+'|'+row; }
 // 保留中の件数バッジ表示
 function updateQueueBadge(){
   var q=getShiireQueue();
-  var n=Object.keys(q).length;
+  var ks=Object.keys(q);
+  var dead=0, pending=0;
+  ks.forEach(function(k){ if(q[k]&&q[k].dead) dead++; else pending++; });
   var el=document.getElementById('shiire-queue-bar');
   if(!el) return;
-  if(n>0){
+  if(pending>0 || dead>0){
     el.style.display='flex';
     var online=navigator.onLine;
-    el.innerHTML='<span style="font-size:11px;font-weight:700;color:#92400e">⏳ 送信待ち '+n+'件</span>'+
-      '<span style="font-size:9px;color:#b45309">'+(online?'送信中…':'📴 オフライン')+'</span>';
+    var html='';
+    if(pending>0){
+      html+='<span style="font-size:11px;font-weight:700;color:#92400e">⏳ 送信待ち '+pending+'件</span>'+
+            '<span style="font-size:9px;color:#b45309">'+(online?'送信中…':'📴 オフライン')+'</span>';
+    }
+    if(dead>0){
+      // 恒久エラー（要確認）— 赤系で目立たせる
+      html+='<span style="font-size:11px;font-weight:700;color:#b91c1c'+(pending>0?';margin-left:auto':'')+'">❌ 要確認 '+dead+'件</span>';
+    }
+    el.innerHTML=html;
   }else{
     el.style.display='none';
     el.innerHTML='';
@@ -1940,66 +1950,106 @@ function doSSave(fn,idx,key){
   flushShiireQueue();
 }
 
+// 1件分を送信。戻り値: 'ok'（成功・削除済）/ 'server'（サーバ応答不正）/ 'net'（通信失敗）/ 'dead'（恒久エラー・要確認）
+var SHIIRE_MAX_TRIES=10; // サーバ応答不正がこの回数続いたら諦めて「要確認」にする
+async function sendOneShiire(qk){
+  var item=getShiireQueue()[qk];
+  if(!item) return 'ok';
+  // すでに恒久エラー扱いのものは送信しない（無限リトライ防止）
+  if(item.dead) return 'dead';
+  var ctrl=new AbortController();
+  var to=setTimeout(function(){ctrl.abort();},20000);
+  var res,json=null;
+  try{
+    try{
+      res=await fetch(SHIIRE_GAS_URL,{
+        method:'POST',
+        body:JSON.stringify({action:'write',sheetId:SHIIRE_SHEET_ID,sheetName:item.sheetName,row:item.row,f:item.f,h:item.h,i:item.i}),
+        headers:{'Content-Type':'text/plain'},
+        signal:ctrl.signal
+      });
+    }finally{ clearTimeout(to); }
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    var txt=await res.text();
+    try{ json=JSON.parse(txt); }catch(pe){ json=null; }
+    if(json&&json.success){
+      var cur=getShiireQueue();
+      delete cur[qk];
+      setShiireQueue(cur);
+      if(item.sheetName===shiireSheet){
+        var m=document.getElementById('msg_'+item.key);
+        if(m){m.textContent='✓ 保存しました';m.className='s-save-msg ok';}
+      }
+      return 'ok';
+    }
+    // サーバ側エラー（データ不正・GASエラーページなど）→ 失敗回数を加算して残す
+    var cur2=getShiireQueue();
+    var it2=cur2[qk];
+    if(it2){
+      it2.tries=(it2.tries||0)+1;
+      if(it2.tries>=SHIIRE_MAX_TRIES){
+        // 諦める：恒久エラーとして印を付け、リトライ対象から外す
+        it2.dead=true;
+        setShiireQueue(cur2);
+        if(item.sheetName===shiireSheet){
+          var md=document.getElementById('msg_'+item.key);
+          if(md){md.textContent='❌ 保存できません（数値を確認して入力し直してください）';md.className='s-save-msg err';}
+        }
+        return 'dead';
+      }
+      setShiireQueue(cur2);
+    }
+    if(item.sheetName===shiireSheet){
+      var m2=document.getElementById('msg_'+item.key);
+      if(m2){m2.textContent='⚠️ サーバ応答が不正（再試行 '+((it2&&it2.tries)||1)+'/'+SHIIRE_MAX_TRIES+'）';m2.className='s-save-msg';}
+    }
+    return 'server';
+  }catch(e){
+    // 通信失敗・タイムアウト（圏外・電波弱）→ 残して後で自動リトライ（回数はカウントしない）
+    if(item.sheetName===shiireSheet){
+      var m3=document.getElementById('msg_'+item.key);
+      if(m3){m3.textContent='📴 未送信（回線待ち・自動で再試行）';m3.className='s-save-msg';}
+    }
+    return 'net';
+  }
+}
+
 var shiireFlushing=false;
-async function flushShiireQueue(){
-  if(shiireFlushing) return;
-  if(!navigator.onLine){ updateQueueBadge(); return; }
+var shiireFlushAgain=false; // 送信中に新しい入力が来たら、終わった後にもう一度回す
+var SHIIRE_BATCH=4;         // 同時送信数（速度向上）
+// dead（恒久エラー）を除いた、まだ送るべきキー
+function pendingShiireKeys(){
   var q=getShiireQueue();
-  var keys=Object.keys(q);
-  if(keys.length===0){ updateQueueBadge(); return; }
+  return Object.keys(q).filter(function(k){ return q[k] && !q[k].dead; });
+}
+async function flushShiireQueue(){
+  if(shiireFlushing){ shiireFlushAgain=true; return; } // 実行中なら再実行を予約
+  if(!navigator.onLine){ updateQueueBadge(); return; }
+  if(pendingShiireKeys().length===0){ updateQueueBadge(); return; }
   shiireFlushing=true;
   try{
-    for(var idx=0; idx<keys.length; idx++){
-      var qk=keys[idx];
-      var item=q[qk];
-      if(!item) continue;
-      // 送信中マーク（onlineバッジ用）
-      try{
-        // 20秒でタイムアウト（応答が返らないまま放置→二重送信を防ぐ）
-        var ctrl=new AbortController();
-        var to=setTimeout(function(){ctrl.abort();},20000);
-        var res,json=null;
-        try{
-          res=await fetch(SHIIRE_GAS_URL,{
-            method:'POST',
-            body:JSON.stringify({action:'write',sheetId:SHIIRE_SHEET_ID,sheetName:item.sheetName,row:item.row,f:item.f,h:item.h,i:item.i}),
-            headers:{'Content-Type':'text/plain'},
-            signal:ctrl.signal
-          });
-        }finally{ clearTimeout(to); }
-        // HTTPステータスを確認（GASのエラーHTMLをsuccess扱いしない）
-        if(!res.ok) throw new Error('HTTP '+res.status);
-        var txt=await res.text();
-        try{ json=JSON.parse(txt); }catch(pe){ json=null; }
-        if(json&&json.success){
-          // 成功 → キューから削除
-          var cur=getShiireQueue();
-          delete cur[qk];
-          setShiireQueue(cur);
-          // 該当行が同じシートで表示中なら ✓保存 を表示
-          if(item.sheetName===shiireSheet){
-            var m=document.getElementById('msg_'+item.key);
-            if(m){m.textContent='✓ 保存しました';m.className='s-save-msg ok';}
-          }
-        }else{
-          // サーバ側エラー（データ不正・GASエラーページなど）→ 残して次回リトライ
-          if(item.sheetName===shiireSheet){
-            var m2=document.getElementById('msg_'+item.key);
-            if(m2){m2.textContent='⚠️ サーバ応答が不正（再試行します）';m2.className='s-save-msg';}
-          }
-        }
-      }catch(e){
-        // 通信失敗・タイムアウト（圏外・電波弱）→ このアイテムを残して中断、後で自動リトライ
-        if(item.sheetName===shiireSheet){
-          var m3=document.getElementById('msg_'+item.key);
-          if(m3){m3.textContent='📴 未送信（回線待ち・自動で再試行）';m3.className='s-save-msg';}
-        }
-        break;
+    do{
+      shiireFlushAgain=false;
+      var netFail=false;
+      // 毎ループでキューを取り直す（送信中に増えた分も拾う・deadは除く）
+      var keys=pendingShiireKeys();
+      for(var i=0; i<keys.length; i+=SHIIRE_BATCH){
+        if(!navigator.onLine){ netFail=true; break; }
+        var batch=keys.slice(i,i+SHIIRE_BATCH);
+        // バッチ内は並列送信。1件失敗しても他は止めない（break しない）
+        var results=await Promise.all(batch.map(function(qk){ return sendOneShiire(qk); }));
+        if(results.indexOf('net')!==-1){ netFail=true; break; } // 通信失敗は次回リトライ
       }
-    }
+      if(netFail) break; // 圏外などはここで中断（残りはキューに残る）
+      // 通信は成功。送信中に新規入力が来ていれば、もう一周して残りを送る
+    }while(shiireFlushAgain && navigator.onLine);
   }finally{
     shiireFlushing=false;
     updateQueueBadge();
+    // 取りこぼし保険：dead以外がまだ残っていてオンラインなら、少し後に再送
+    if(navigator.onLine && pendingShiireKeys().length>0){
+      setTimeout(function(){ flushShiireQueue(); }, 1200);
+    }
   }
 }
 
