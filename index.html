@@ -698,6 +698,7 @@ var noteTargetKey= '';
 var noteTargetIdx= -1;
 var groupComments= {}; // { code: { text, time } }
 var stockAdjusted= {}; // { fingerprint: { from, to } } — 在庫調整された注文
+var gasEdits     = {}; // { editKey: { qty, unit, comment } } — 管理者の修正（GAS同期・全端末共有）
 
 // ══════════════════════════════════════════════════════════════
 // 仕入入力 CONSTANTS
@@ -725,6 +726,10 @@ var shiireTimers    = {};
     document.getElementById('login-code').value = code;
     doLogin();
   }
+  // 前回セッションで送り残した管理者編集を、起動時に自動再送
+  setTimeout(function(){
+    try{ updateAdminQueueBadge(); flushAdminQueue(); }catch(_){}
+  }, 800);
 })();
 
 // ══════════════════════════════════════════════════════════════
@@ -809,11 +814,13 @@ function loadOrdersData() {
   var ordersUrl   = gasUrl + '?action=getOrders&code='        + encodeURIComponent(code);
   var deletedUrl  = gasUrl + '?action=getDeleted&date='       + encodeURIComponent(dateStr);
   var commentsUrl = gasUrl + '?action=getGroupComments&date=' + encodeURIComponent(dateStr);
+  var editsUrl    = gasUrl + '?action=getEdits&date='         + encodeURIComponent(dateStr);
 
   Promise.all([
     fetch(ordersUrl).then(function(r){ return r.json(); }),
     fetch(deletedUrl).then(function(r){ return r.json(); }).catch(function(){ return { deleted:[] }; }),
-    fetch(commentsUrl).then(function(r){ return r.json(); }).catch(function(){ return { comments:{} }; })
+    fetch(commentsUrl).then(function(r){ return r.json(); }).catch(function(){ return { comments:{} }; }),
+    fetch(editsUrl).then(function(r){ return r.json(); }).catch(function(){ return { edits:{} }; })
   ])
   .then(function(results){
     hideLoading();
@@ -821,9 +828,14 @@ function loadOrdersData() {
     var json     = results[0];
     var delJson  = results[1];
     var cmtJson  = results[2];
+    var editJson = results[3];
     if (!json.success) { showToast(json.error || 'エラーが発生しました','error'); return; }
 
     groupComments = cmtJson.comments || {};
+
+    // 管理者の修正（GAS同期・全端末共有）を保持
+    gasEdits = (editJson && editJson.edits) ? editJson.edits : {};
+    store('set','gas_edits_'+todayKey(), JSON.stringify(gasEdits));
 
     // Store deleted fingerprints (from GAS, shared across all devices)
     var deletedFps = {};
@@ -831,6 +843,9 @@ function loadOrdersData() {
     store('set','gas_deleted_'+todayKey(), JSON.stringify(deletedFps));
 
     var freshOrders = json.orders || [];
+    // ★ 管理者の修正を全注文に適用（partner / admin 共通）。これにより
+    //    数量・単位・コメントの変更が全端末に反映される。
+    applyGasEdits(freshOrders);
     detectNewOrders(freshOrders, json.syncDate || '');
     todayOrders = freshOrders;
     saveSnapshot(freshOrders);
@@ -858,6 +873,28 @@ function loadOrdersData() {
 
 function getGasDeleted() {
   return JSON.parse(store('get','gas_deleted_'+todayKey()) || '{}');
+}
+
+function getGasEdits() {
+  return JSON.parse(store('get','gas_edits_'+todayKey()) || '{}');
+}
+
+// 管理者の修正を注文配列に適用する。
+// ・元の qty/unit は _fpQty/_fpUnit に退避し、fingerprint 計算は元値を使う
+//   （getDeleted/getStock は元の数量で記録されているため整合させる）。
+// ・表示用の o.qty / o.unit / o.comment を上書きする。
+function applyGasEdits(orders) {
+  var edits = gasEdits || {};
+  orders.forEach(function(o){
+    // fingerprint 用の元値を退避（未設定なら現在値）
+    if (o._fpQty  === undefined) o._fpQty  = o.qty;
+    if (o._fpUnit === undefined) o._fpUnit = o.unit;
+    var e = edits[orderEditKey(o)];
+    if (!e) return;
+    if (e.qty     !== undefined && e.qty     !== '') o.qty     = e.qty;
+    if (e.unit    !== undefined)                     o.unit    = e.unit;
+    if (e.comment !== undefined)                     o.comment = e.comment;
+  });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -914,10 +951,7 @@ function autoCancelByStock() {
             if (!deleted[fp]) {
               deleted[fp] = true;
               changed = true;
-              pending.push(
-                fetch(gasUrl + '?action=markDeleted&fp=' + encodeURIComponent(fp) + '&date=' + encodeURIComponent(ds))
-                  .catch(function(){})
-              );
+              enqueueAdmin('markDeleted', { fp:fp }, 'del|'+fp);
             }
           } else {
             // 一部だけ在庫あり → 注文数量を不足分に減らす（表示のみ）
@@ -939,7 +973,17 @@ function autoCancelByStock() {
 // NEW ORDER DETECTION
 // ══════════════════════════════════════════════════════════════
 function orderFingerprint(o) {
-  return [o.custCode, o.itemCode, o.itemName, o.qty, o.unit].join('|');
+  // 管理者修正前の元の数量・単位で fingerprint を計算する。
+  // （getDeleted / getStock は元値で記録されているため整合性を保つ）
+  var q = (o._fpQty  !== undefined) ? o._fpQty  : o.qty;
+  var u = (o._fpUnit !== undefined) ? o._fpUnit : o.unit;
+  return [o.custCode, o.itemCode, o.itemName, q, u].join('|');
+}
+
+// 修正同期用キー：qty/unit を含めない（数量を変えてもキーは不変）。
+// 全端末・全ログインで一致するよう loginCode/index は含めない。
+function orderEditKey(o) {
+  return [o.custCode, o.itemCode, o.itemName].join('|');
 }
 
 function detectNewOrders(freshOrders, syncDate) {
@@ -1373,15 +1417,19 @@ function selectAdminGroup(code) {
 
 function renderAdminList() {
   adminEdits = JSON.parse(store('get','admin_edits_'+todayKey()) || '{}');
+  gasEdits   = getGasEdits();
   var el   = document.getElementById('admin-list');
 
   var allRows = todayOrders.map(function(o,i){
     var key  = orderKey(i,o);
     var edit = adminEdits[key] || {};
+    var ge   = gasEdits[orderEditKey(o)] || {};
+    // o.qty/o.unit/o.comment は applyGasEdits 適用済み。GAS編集を最優先、
+    // 次にローカル admin_edits、最後に注文の現在値。
     return { key:key, i:i, o:o,
-      qty:     edit.qty     !== undefined ? edit.qty     : o.qty,
-      unit:    edit.unit    !== undefined ? edit.unit    : o.unit,
-      comment: edit.comment !== undefined ? edit.comment : (o.comment||''),
+      qty:     ge.qty     !== undefined ? ge.qty     : (edit.qty     !== undefined ? edit.qty     : o.qty),
+      unit:    ge.unit    !== undefined ? ge.unit    : (edit.unit    !== undefined ? edit.unit    : o.unit),
+      comment: ge.comment !== undefined ? ge.comment : (edit.comment !== undefined ? edit.comment : (o.comment||'')),
       deleted: !!edit.deleted
     };
   });
@@ -1471,19 +1519,17 @@ function openCmtModal() {
 function closeCmtModal() { document.getElementById('cmt-modal').classList.remove('show'); }
 function saveCmtModal() {
   var text    = document.getElementById('cmt-modal-text').value.trim();
-  var dateStr = todayKey().replace('snap_','');
-  fetch(gasUrl + '?action=setGroupComment&code=' + encodeURIComponent(currentGroup)
-    + '&text=' + encodeURIComponent(text) + '&date=' + encodeURIComponent(dateStr))
-  .then(function(){
-    if (text) {
-      groupComments[String(currentGroup)] = { text: text, time: pad(new Date().getHours())+':'+pad(new Date().getMinutes()) };
-    } else {
-      delete groupComments[String(currentGroup)];
-    }
-    closeCmtModal();
-    renderAdminList();
-    showToast(text ? 'コメントを保存しました':'コメントを削除しました', 'success');
-  }).catch(function(){ showToast('保存に失敗しました','error'); });
+  enqueueAdmin('setGroupComment',
+    { code:String(currentGroup), text:text },
+    'gcmt|'+currentGroup);
+  if (text) {
+    groupComments[String(currentGroup)] = { text: text, time: pad(new Date().getHours())+':'+pad(new Date().getMinutes()) };
+  } else {
+    delete groupComments[String(currentGroup)];
+  }
+  closeCmtModal();
+  renderAdminList();
+  showToast(text ? 'コメントを保存しました（同期中…）':'コメントを削除しました（同期中…）', 'success');
 }
 
 function buildAdminStoreRow(r) {
@@ -1543,7 +1589,24 @@ function saveAdminRow(key){
   if(!adminEdits[key]) adminEdits[key]={};
   adminEdits[key].qty=qty; adminEdits[key].unit=unit; adminEdits[key].comment=cmt;
   store('set','admin_edits_'+todayKey(), JSON.stringify(adminEdits));
-  showToast('保存しました ✓','success');
+
+  // ★ GASへ同期（全端末・partnerにも反映）— キュー経由で確実に送る
+  for(var j=0;j<todayOrders.length;j++){
+    if(orderKey(j,todayOrders[j])===key){
+      var o  = todayOrders[j];
+      var ek = orderEditKey(o);
+      // ローカルの注文・同期キャッシュにも即反映
+      o.qty=qty; o.unit=unit; o.comment=cmt;
+      gasEdits[ek]={ qty:qty, unit:unit, comment:cmt };
+      store('set','gas_edits_'+todayKey(), JSON.stringify(gasEdits));
+      enqueueAdmin('setEdit',
+        { key:ek, qty:qty, unit:unit, comment:cmt },
+        'setEdit|'+ek);
+      break;
+    }
+  }
+
+  showToast('保存しました（同期中…）','success');
   renderAdminList();
 }
 
@@ -1555,14 +1618,13 @@ function deleteAdminRow(key){
   for(var j=0;j<todayOrders.length;j++){
     if(orderKey(j,todayOrders[j])===key){
       var fp=orderFingerprint(todayOrders[j]);
-      var ds=todayKey().replace('snap_','');
-      fetch(gasUrl+'?action=markDeleted&fp='+encodeURIComponent(fp)+'&date='+encodeURIComponent(ds)).catch(function(){});
+      enqueueAdmin('markDeleted', { fp:fp }, 'del|'+fp);
       var d=getGasDeleted(); d[fp]=true;
       store('set','gas_deleted_'+todayKey(), JSON.stringify(d));
       break;
     }
   }
-  showToast('削除しました');
+  showToast('削除しました（同期中…）');
   renderAdminList();
 }
 
@@ -1574,14 +1636,13 @@ function restoreAdminRow(key){
   for(var j=0;j<todayOrders.length;j++){
     if(orderKey(j,todayOrders[j])===key){
       var fp=orderFingerprint(todayOrders[j]);
-      var ds=todayKey().replace('snap_','');
-      fetch(gasUrl+'?action=unmarkDeleted&fp='+encodeURIComponent(fp)+'&date='+encodeURIComponent(ds)).catch(function(){});
+      enqueueAdmin('unmarkDeleted', { fp:fp }, 'del|'+fp);
       var d=getGasDeleted(); delete d[fp];
       store('set','gas_deleted_'+todayKey(), JSON.stringify(d));
       break;
     }
   }
-  showToast('復元しました','success');
+  showToast('復元しました（同期中…）','success');
   renderAdminList();
 }
 
@@ -1626,11 +1687,44 @@ function reloadShiireConfirm(){
   }
   reloadShiire();
 }
-// ブラウザの更新／閉じる／戻る時に、入力途中があれば警告し保存する
+// ブラウザの更新／閉じる／戻る時に、未送信があれば警告し送信を試みる（消失防止）
 window.addEventListener('beforeunload', function(e){
-  if(hasUnsavedShiireInput()){
+  var hasUnsaved = hasUnsavedShiireInput();
+  if(hasUnsaved){
     commitAllDirty();                      // localStorage は同期書き込み→次回起動で再送
+  }
+  // 仕入・管理者編集のどちらかに未送信が残っていれば離脱を引き止める
+  var pendingShiire = (typeof pendingShiireKeys==='function') ? pendingShiireKeys().length : 0;
+  var pendingAdmin  = (typeof pendingAdminKeys==='function')  ? pendingAdminKeys().length  : 0;
+  if(hasUnsaved || pendingShiire>0 || pendingAdmin>0){
+    // 最後にもう一度送信を試みる（非同期だが、キューはlocalStorageに残るので
+    // 送れなくても次回起動時に自動再送される）
+    try{ flushShiireQueue(); }catch(_){}
+    try{ flushAdminQueue(); }catch(_){}
     e.preventDefault(); e.returnValue='';  // ブラウザ標準の離脱確認を表示
+  }
+});
+
+// ★モバイル対策：beforeunload はiOS Safari等でアプリ切替・画面ロック時に
+//   発火しないことが多い。visibilitychange（非表示になる瞬間）と pagehide で
+//   入力途中の値を確実にlocalStorageへ確定保存する。これらは同期処理なので
+//   ページが凍結される前に書き込みが完了する。送信は次回前面復帰時に行う。
+function commitOnHide(){
+  try{
+    if(typeof hasUnsavedShiireInput==='function' && hasUnsavedShiireInput()){
+      commitAllDirty(); // dirtyな全欄をlocalStorageへ即保存
+    }
+  }catch(_){}
+}
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState==='hidden') commitOnHide();
+});
+window.addEventListener('pagehide', commitOnHide);
+// 前面に戻ったら送信を再開（オフライン中にためた分を流す）
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState==='visible'){
+    try{ flushShiireQueue(); }catch(_){}
+    try{ flushAdminQueue(); }catch(_){}
   }
 });
 
@@ -1642,6 +1736,7 @@ async function loadShiireData(){
   try{
     var url=SHIIRE_GAS_URL+'?action=readAll&sheetId='+encodeURIComponent(SHIIRE_SHEET_ID)+'&sheetName='+encodeURIComponent(shiireSheet);
     var res=await fetch(url);
+    if(!res.ok) throw new Error('HTTP '+res.status);
     var json=await res.json();
     if(json.error){
       if(panel) panel.innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--red)"><div style="font-size:32px;margin-bottom:12px">⚠️</div><p style="font-size:13px">'+esc(json.error)+'</p><button onclick="reloadShiire()" style="margin-top:12px;padding:10px 20px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer">🔄 再試行</button></div>';
@@ -1959,7 +2054,9 @@ function updateQueueBadge(){
   }
 }
 
-// 入力中（まだ送信しない）— フォーカスが外れた時に確定送信
+// 入力中 — 変化を「未保存」として記録しつつ、400msのデバウンスで
+// localStorageへ自動保存する（送信はしない）。これにより、ほかの欄を
+// 押さずにアプリ切替・スリープ・タブを閉じても入力値が消えない。
 function schDirty(key){
   clearTimeout(shiireTimers[key]);
   // 保存済みの値と比較し、実際に変化した時だけ「未保存」として記録する
@@ -1977,16 +2074,29 @@ function schDirty(key){
   }
   if(changed) shiireDirtyKeys[key]=1; else delete shiireDirtyKeys[key];
   var m=document.getElementById('msg_'+key);
-  if(m){m.textContent='✏️ 入力中…（ほかの欄を押すと保存）';m.className='s-save-msg';}
+  if(m){m.textContent='✏️ 入力中…';m.className='s-save-msg';}
+
+  // 変化があれば400ms後に自動保存（送信はしない＝速度に影響させない）
+  if(changed && mp){
+    shiireTimers[key]=setTimeout(function(){
+      // まだ同じ欄を編集中でも、値だけは安全に保存しておく
+      doSSave(mp.fn,mp.idx,key,false);
+    },400);
+  }
 }
 
 function schSave(fn,idx,key){
   clearTimeout(shiireTimers[key]);
-  // onchange は値が確定したタイミングで発火するので即保存
-  doSSave(fn,idx,key);
+  // onchange は値が確定したタイミングで発火するので即保存＋即送信
+  doSSave(fn,idx,key,true);
 }
 
-function doSSave(fn,idx,key){
+// doSend=true  : 保存してすぐ送信（onchange・確定時）
+// doSend=false : 保存だけ（oninputのデバウンス。送信は次のonchange/自動リトライに任せる）
+//   → 入力途中でも値がlocalStorageに残るので、画面遷移・アプリ切替・端末スリープで
+//     beforeunloadが発火しなくても消えない。送信はしないので入力の速度に影響しない。
+function doSSave(fn,idx,key,doSend){
+  if(doSend===undefined) doSend=true;
   clearTimeout(shiireTimers[key]);
   var s=shiireData[fn]&&shiireData[fn][idx];
   if(!s)return;
@@ -2002,10 +2112,12 @@ function doSSave(fn,idx,key){
   s.qty=fv; s.price=hv; s.shiirePrice=iv;
 
   // 2) キューに保存（永続化）— 同じ行は最新値で上書き
+  // ★空欄は null ではなく '' を送る。GAS側で「''=セルをクリア」「キー無し=触らない」
+  //   と区別するため。3列(F/H/I)はそれぞれ独立してクリアできる。
   var q=getShiireQueue();
   q[qKeyOf(shiireSheet,s.row)]={
     sheetName:shiireSheet, row:s.row,
-    f:fv||null, h:hv||null, i:iv||null,
+    f:fv, h:hv, i:iv,
     fn:fn, idx:idx, key:key, ts:Date.now(),
     ver:(Date.now()+'_'+(++shiireSeq)) // 上書き検出用の一意トークン
   };
@@ -2020,14 +2132,16 @@ function doSSave(fn,idx,key){
   var r=document.getElementById('row_'+key);if(r)r.classList.toggle('filled',filled);
   var m=document.getElementById('msg_'+key);
   if(m){
-    if(qSaved){ m.textContent='⏳ 送信待ち'; m.className='s-save-msg'; }
-    else { m.textContent='❌ 保存できませんでした（容量不足）。値をメモして再入力してください'; m.className='s-save-msg err'; }
+    if(!qSaved){ m.textContent='❌ 保存できませんでした（容量不足）。値をメモして再入力してください'; m.className='s-save-msg err'; }
+    else if(doSend){ m.textContent='⏳ 送信待ち'; m.className='s-save-msg'; }
+    else { m.textContent='✏️ 入力中…（自動保存済み）'; m.className='s-save-msg'; } // 保存済み・未送信
   }
 
   updateQueueBadge();
 
-  // 4) 送信を試みる（保存成功時のみ。失敗時はキューに無いので送るものがない）
-  if(qSaved) flushShiireQueue();
+  // 4) 送信を試みる（doSend=true かつ 保存成功時のみ）。
+  //    oninput(doSend=false)では送信しない＝入力の速度に影響させない。
+  if(qSaved && doSend) flushShiireQueue();
 }
 
 function retryBtnHtml(row,domKey){
@@ -2080,11 +2194,12 @@ async function sendOneShiire(qk){
       // 送信中にユーザーが同じ欄を編集していた場合（ver が変わっている）、
       // 古い送信の成功で新しい値を消さない（＝V2の消失を防ぐ）
       if(cur[qk] && cur[qk].ver===sentVer){
+        var wasClear=(cur[qk].f===''&&cur[qk].h===''&&cur[qk].i==='');
         delete cur[qk];
         setShiireQueue(cur);
         if(item.sheetName===shiireSheet){
           var m=document.getElementById('msg_'+item.key);
-          if(m){m.textContent='✓ 保存しました';m.className='s-save-msg ok';}
+          if(m){m.textContent=wasClear?'🗑 削除しました':'✓ 保存しました';m.className='s-save-msg ok';}
         }
       }else{
         // より新しい入力が残っている → もう一周して新しい値を送る
@@ -2171,6 +2286,184 @@ async function flushShiireQueue(){
 setInterval(function(){ flushShiireQueue(); }, 15000);
 window.addEventListener('online', function(){ showToast('回線が復帰しました。送信を再開します','success'); flushShiireQueue(); });
 window.addEventListener('offline', function(){ updateQueueBadge(); });
+
+// ══════════════════════════════════════════════════════════════
+// 管理者編集 オフラインキュー（setEdit / markDeleted / unmarkDeleted /
+// setGroupComment を POST で送る。電波が弱い／圏外でも編集を保持し、
+// 回線が安定したらGASへ書き込めるまで自動リトライ。仕入入力と同じ思想）
+//
+// ・各操作を1件ずつキューに積む（localStorage 永続化）
+// ・ver（一意トークン）で「送信中に上書きされたか」を判定し、古い送信の
+//   成功で新しい編集を消さない
+// ・15秒ごと＋オンライン復帰時に自動フラッシュ
+// ・成功するまで「⏳ 送信待ち」、サーバ恒久エラーは MAX_TRIES で諦めて表示
+// ══════════════════════════════════════════════════════════════
+var ADMIN_QUEUE_KEY = 'admin_queue_v1';
+var adminSeq = 0;
+var ADMIN_MAX_TRIES = 10;
+var adminFlushing = false;
+var adminFlushAgain = false;
+var ADMIN_BATCH = 4;
+
+function getAdminQueue(){
+  try{ return JSON.parse(store('get',ADMIN_QUEUE_KEY)||'{}'); }catch(e){ return {}; }
+}
+var adminStorageBroken=false;
+function setAdminQueue(q){
+  var s; try{ s=JSON.stringify(q); }catch(e){ s=null; }
+  if(s===null){ adminStorageBroken=true; showStorageError(); return false; }
+  try{
+    localStorage.setItem(ADMIN_QUEUE_KEY, s);
+    if(adminStorageBroken){ adminStorageBroken=false; hideStorageError(); }
+    return true;
+  }catch(e){
+    adminStorageBroken=true; showStorageError(); return false;
+  }
+}
+
+// 操作をキューに積む。logicalKey が同じものは最新で上書き（無駄な多重送信を防ぐ）。
+//   action: 'setEdit' | 'markDeleted' | 'unmarkDeleted' | 'setGroupComment'
+//   payload: GASに渡すフィールド（date は送信時に補完）
+//   logicalKey: 同じ対象への操作をまとめる識別子
+function enqueueAdmin(action, payload, logicalKey){
+  var q=getAdminQueue();
+  q[logicalKey]={
+    action:action, payload:payload, logicalKey:logicalKey,
+    ts:Date.now(), tries:0, dead:false,
+    ver:(Date.now()+'_'+(++adminSeq))
+  };
+  var ok=setAdminQueue(q);
+  updateAdminQueueBadge();
+  if(ok) flushAdminQueue();
+  return ok;
+}
+
+function pendingAdminKeys(){
+  var q=getAdminQueue();
+  return Object.keys(q).filter(function(k){ return q[k] && !q[k].dead; });
+}
+
+// 送信待ち／要確認の件数を画面上部のバッジに表示
+function updateAdminQueueBadge(){
+  var q=getAdminQueue();
+  var ks=Object.keys(q);
+  var dead=0, pending=0;
+  ks.forEach(function(k){ if(q[k]&&q[k].dead) dead++; else pending++; });
+  var el=document.getElementById('admin-queue-bar');
+  if(!el){
+    if(pending>0||dead>0){
+      el=document.createElement('div');
+      el.id='admin-queue-bar';
+      el.style.cssText='display:flex;position:fixed;left:50%;top:10px;transform:translateX(-50%);max-width:92%;justify-content:center;align-items:center;gap:6px;background:#fffbeb;border:1px solid var(--amber-border);border-radius:20px;padding:6px 12px;box-shadow:0 4px 16px rgba(15,39,68,0.2);z-index:901;white-space:nowrap';
+      document.body.appendChild(el);
+    }else{
+      return;
+    }
+  }
+  if(pending>0||dead>0){
+    el.style.display='flex';
+    var online=navigator.onLine;
+    var html='';
+    if(pending>0){
+      html+='<span style="font-size:11px;font-weight:700;color:#92400e">⏳ 同期待ち '+pending+'件</span>'+
+            '<span style="font-size:9px;color:#b45309">'+(online?'送信中…':'📴 オフライン')+'</span>';
+    }
+    if(dead>0){
+      html+='<span style="font-size:11px;font-weight:700;color:#b91c1c'+(pending>0?';margin-left:auto':'')+'">❌ 要確認 '+dead+'件</span>';
+    }
+    el.innerHTML=html;
+  }else{
+    el.style.display='none';
+    el.innerHTML='';
+  }
+}
+
+// 1件送信。戻り値 'ok'/'server'/'net'/'dead'
+async function sendOneAdmin(qk){
+  var item=getAdminQueue()[qk];
+  if(!item) return 'ok';
+  if(item.dead) return 'dead';
+  var sentVer=item.ver;
+  var ds=todayKey().replace('snap_','');
+  var body={action:item.action, date:ds};
+  var pl=item.payload||{};
+  for(var pk in pl){ if(pl.hasOwnProperty(pk)) body[pk]=pl[pk]; }
+  var ctrl=new AbortController();
+  var to=setTimeout(function(){ctrl.abort();},20000);
+  var res,json=null;
+  try{
+    try{
+      res=await fetch(gasUrl,{
+        method:'POST',
+        body:JSON.stringify(body),
+        headers:{'Content-Type':'text/plain'}, // GASのCORSプリフライト回避
+        signal:ctrl.signal
+      });
+    }finally{ clearTimeout(to); }
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    var txt=await res.text();
+    try{ json=JSON.parse(txt); }catch(pe){ json=null; }
+    if(json&&json.success){
+      var cur=getAdminQueue();
+      if(cur[qk] && cur[qk].ver===sentVer){
+        delete cur[qk];
+        setAdminQueue(cur);
+      }else{
+        adminFlushAgain=true; // 送信中に新しい編集 → もう一周
+      }
+      return 'ok';
+    }
+    // success が false
+    var cur2=getAdminQueue();
+    var it2=cur2[qk];
+    if(it2 && it2.ver!==sentVer){ adminFlushAgain=true; return 'ok'; }
+    if(it2){
+      it2.tries=(it2.tries||0)+1;
+      if(json&&(json.error||json.message)) it2.err=String(json.error||json.message);
+      if(it2.tries>=ADMIN_MAX_TRIES){
+        it2.dead=true;
+        setAdminQueue(cur2);
+        return 'dead';
+      }
+      setAdminQueue(cur2);
+    }
+    return 'server';
+  }catch(e){
+    // 通信失敗・タイムアウト → 残して自動リトライ（回数はカウントしない）
+    return 'net';
+  }
+}
+
+async function flushAdminQueue(){
+  if(adminFlushing){ adminFlushAgain=true; return; }
+  if(!navigator.onLine){ updateAdminQueueBadge(); return; }
+  if(pendingAdminKeys().length===0){ updateAdminQueueBadge(); return; }
+  adminFlushing=true;
+  try{
+    do{
+      adminFlushAgain=false;
+      var netFail=false;
+      var keys=pendingAdminKeys();
+      for(var i=0;i<keys.length;i+=ADMIN_BATCH){
+        if(!navigator.onLine){ netFail=true; break; }
+        var batch=keys.slice(i,i+ADMIN_BATCH);
+        var results=await Promise.all(batch.map(function(qk){ return sendOneAdmin(qk); }));
+        if(results.indexOf('net')!==-1){ netFail=true; break; }
+      }
+      if(netFail) break;
+    }while(adminFlushAgain && navigator.onLine);
+  }finally{
+    adminFlushing=false;
+    updateAdminQueueBadge();
+    if(navigator.onLine && pendingAdminKeys().length>0){
+      setTimeout(function(){ flushAdminQueue(); }, 1500);
+    }
+  }
+}
+
+// 自動リトライ：15秒ごと＋オンライン復帰時（仕入と共通の online/offline ハンドラに相乗り）
+setInterval(function(){ flushAdminQueue(); }, 15000);
+window.addEventListener('online', function(){ flushAdminQueue(); });
 
 // ══════════════════════════════════════════════════════════════
 // HELPERS
