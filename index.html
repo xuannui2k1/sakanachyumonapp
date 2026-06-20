@@ -773,7 +773,7 @@ function onReloadClick() {
   if (isAdmin) {
     // 管理者：開いているタブだけ更新
     if (adminCurrentTab === 'shiire') {
-      reloadShiire();
+      reloadShiireConfirm();
     } else {
       loadOrdersData();
     }
@@ -1610,6 +1610,30 @@ function selectShiirePrefix(prefix){
 
 function reloadShiire(){ shiireLoaded=false; shiireCurrentPrefix=null; initShiireTab(); }
 
+// 入力途中（未保存）の行があるか
+function hasUnsavedShiireInput(){ return Object.keys(shiireDirtyKeys).length>0; }
+// 入力途中の値をすべてキューに確定保存する
+function commitAllDirty(){
+  Object.keys(shiireDirtyKeys).forEach(function(key){
+    var mp=shiireKeyMap[key]; if(mp) doSSave(mp.fn,mp.idx,key);
+  });
+}
+// ユーザー操作による再読込：入力途中があれば確認する（消失防止）
+function reloadShiireConfirm(){
+  if(hasUnsavedShiireInput()){
+    if(!confirm('未保存の入力があります。\n再読み込みしてもよろしいですか？')) return;
+    commitAllDirty(); // 「はい」でも値を保存してから再読込
+  }
+  reloadShiire();
+}
+// ブラウザの更新／閉じる／戻る時に、入力途中があれば警告し保存する
+window.addEventListener('beforeunload', function(e){
+  if(hasUnsavedShiireInput()){
+    commitAllDirty();                      // localStorage は同期書き込み→次回起動で再送
+    e.preventDefault(); e.returnValue='';  // ブラウザ標準の離脱確認を表示
+  }
+});
+
 async function loadShiireData(){
   var panelId = isAdmin ? 'admin-shiire-panel' : 'panel-shiire';
   var panel = document.getElementById(panelId);
@@ -1730,7 +1754,7 @@ function renderShiireList(){
   var hdr='<div style="background:white;border-radius:11px;padding:11px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border:1px solid var(--border);box-shadow:var(--shadow-sm)">'+
     '<div><div style="font-size:13px;font-weight:700;color:var(--navy)">'+esc(shiireSheet)+'</div>'+
     '<div style="font-size:11px;color:var(--gray)">本日の仕入入力</div></div>'+
-    '<button onclick="reloadShiire()" style="font-size:12px;color:var(--navy);background:#eef3fb;border:1px solid #c5d8f0;border-radius:8px;padding:7px 12px;font-family:inherit;font-weight:700;cursor:pointer">🔄 再読込</button>'+
+    '<button onclick="reloadShiireConfirm()" style="font-size:12px;color:var(--navy);background:#eef3fb;border:1px solid #c5d8f0;border-radius:8px;padding:7px 12px;font-family:inherit;font-weight:700;cursor:pointer">🔄 再読込</button>'+
   '</div>'+
   '<div id="shiire-queue-bar" style="display:none;position:fixed;left:50%;top:10px;transform:translateX(-50%);max-width:92%;justify-content:center;align-items:center;gap:6px;background:#fffbeb;border:1px solid var(--amber-border);border-radius:20px;padding:6px 12px;box-shadow:0 4px 16px rgba(15,39,68,0.2);z-index:900;white-space:nowrap"></div>';
   var names=Object.keys(shiireData).filter(function(n){return !prefix||n.startsWith(prefix);}).sort(function(a,b){
@@ -1800,6 +1824,12 @@ function buildGrpCard(kw,variants){
 
 function buildStoreRow(fn,idx,s,showVariant){
   var key=sKey(fn,idx);
+  shiireKeyMap[key]={fn:fn,idx:idx}; // 行特定用
+  // この行が「要確認(dead)」状態なら、メッセージ＋再送信ボタンを初期表示する
+  var _qi=getShiireQueue()[qKeyOf(shiireSheet,s.row)];
+  var _dead=_qi&&_qi.dead;
+  var msgHtml=_dead?(esc('❌ 保存できません: '+(_qi.err||'数値を確認してください'))+retryBtnHtml(s.row,key)):'';
+  var msgCls=_dead?'s-save-msg err':'s-save-msg';
   var filled=s.qty!==''&&s.qty!==null&&s.qty!==undefined;
   var sname=NAME_MAP[Number(s.code)]||s.store;
   var vtag=showVariant?'<span style="font-size:11px;color:#94a3b8;margin-left:4px">'+esc(s.name)+'</span>':'';
@@ -1819,7 +1849,7 @@ function buildStoreRow(fn,idx,s,showVariant){
     '<input type="number" id="i_'+key+'" value="'+esc(s.shiirePrice||'')+'" inputmode="decimal" placeholder="個別価格はここへ" oninput="schDirty(\''+key+'\')" onchange="schSave(\''+fn+'\','+idx+',\''+key+'\')">'+
     '<div style="font-size:10px;color:#aaa;margin-top:3px">この商品のみ異なる場合</div></div>'+
     '</div>'+
-    '<div class="s-save-msg" id="msg_'+key+'"></div></div></div>';
+    '<div class="'+msgCls+'" id="msg_'+key+'">'+msgHtml+'</div></div></div>';
 }
 
 function toggleFC(cid){
@@ -1841,11 +1871,41 @@ function toggleSR(key){
 // 回線が安定したらGoogle Sheetへ書き込めるまで自動リトライ）
 // ══════════════════════════════════════════════════════════════
 var SHIIRE_QUEUE_KEY = 'shiire_queue_v1';
+var shiireSeq = 0; // 各入力に一意のver（送信中に上書きされたか判定するため）
+var shiireDirtyKeys = {}; // 入力途中（まだ保存していない）行 key の集合 — 再読込警告用
+var shiireKeyMap = {};    // key -> {fn, idx} （blur/再読込時に行を特定するため）
 
 function getShiireQueue(){
   try{ return JSON.parse(store('get',SHIIRE_QUEUE_KEY)||'{}'); }catch(e){ return {}; }
 }
-function setShiireQueue(q){ store('set',SHIIRE_QUEUE_KEY, JSON.stringify(q)); }
+
+// localStorage への書き込みが成功したか返す。失敗（容量不足・無効化など）なら
+// 画面下に消えない赤いバーで警告する（黙って失敗＝値が保存も送信もされないのを防ぐ）
+var shiireStorageBroken=false;
+function setShiireQueue(q){
+  var s; try{ s=JSON.stringify(q); }catch(e){ s=null; }
+  if(s===null){ shiireStorageBroken=true; showStorageError(); return false; }
+  try{
+    localStorage.setItem(SHIIRE_QUEUE_KEY, s);
+    if(shiireStorageBroken){ shiireStorageBroken=false; hideStorageError(); } // 復旧したら消す
+    return true;
+  }catch(e){
+    shiireStorageBroken=true; showStorageError(); return false;
+  }
+}
+function showStorageError(){
+  var el=document.getElementById('storage-error-bar');
+  if(!el){
+    el=document.createElement('div');
+    el.id='storage-error-bar';
+    el.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#7f1d1d;color:#fff;padding:12px 16px;font-size:13px;font-weight:700;font-family:inherit;line-height:1.5;box-shadow:0 -4px 20px rgba(0,0,0,0.35);text-align:center';
+    document.body.appendChild(el);
+  }
+  el.innerHTML='⚠️ 端末の保存容量が不足し、入力を保存できませんでした'+
+    '<br><span style="font-weight:400;font-size:12px">この値はメモして、ブラウザのデータ（履歴/キャッシュ）を整理してから入力し直してください</span>';
+  el.style.display='block';
+}
+function hideStorageError(){ var el=document.getElementById('storage-error-bar'); if(el) el.style.display='none'; }
 
 // 現在のシートで送信待ちの値を shiireData に反映（再読込時に未送信の入力が消えないように）
 function applyQueueOverlay(){
@@ -1902,6 +1962,20 @@ function updateQueueBadge(){
 // 入力中（まだ送信しない）— フォーカスが外れた時に確定送信
 function schDirty(key){
   clearTimeout(shiireTimers[key]);
+  // 保存済みの値と比較し、実際に変化した時だけ「未保存」として記録する
+  // （同じ値を入力し直しただけ＝case#3 は未保存扱いにしない＝誤警告を防ぐ）
+  var mp=shiireKeyMap[key];
+  var s=mp&&shiireData[mp.fn]&&shiireData[mp.fn][mp.idx];
+  var fEl=document.getElementById('f_'+key);
+  var hEl=document.getElementById('h_'+key);
+  var iEl=document.getElementById('i_'+key);
+  var changed=true;
+  if(s&&fEl&&hEl&&iEl){
+    changed=(String(fEl.value||'')!==String(s.qty==null?'':s.qty))||
+            (String(hEl.value||'')!==String(s.price==null?'':s.price))||
+            (String(iEl.value||'')!==String(s.shiirePrice==null?'':s.shiirePrice));
+  }
+  if(changed) shiireDirtyKeys[key]=1; else delete shiireDirtyKeys[key];
   var m=document.getElementById('msg_'+key);
   if(m){m.textContent='✏️ 入力中…（ほかの欄を押すと保存）';m.className='s-save-msg';}
 }
@@ -1932,9 +2006,12 @@ function doSSave(fn,idx,key){
   q[qKeyOf(shiireSheet,s.row)]={
     sheetName:shiireSheet, row:s.row,
     f:fv||null, h:hv||null, i:iv||null,
-    fn:fn, idx:idx, key:key, ts:Date.now()
+    fn:fn, idx:idx, key:key, ts:Date.now(),
+    ver:(Date.now()+'_'+(++shiireSeq)) // 上書き検出用の一意トークン
   };
-  setShiireQueue(q);
+  var qSaved=setShiireQueue(q);
+  // 保存できた時だけ「未保存」を解除。失敗時は未保存のままにして再読込時に警告する
+  if(qSaved) delete shiireDirtyKeys[key]; else shiireDirtyKeys[key]=1;
 
   // 3) バッジ等のUI更新
   var filled=(fv!==''&&fv!=null);
@@ -1942,12 +2019,37 @@ function doSSave(fn,idx,key){
   if(b){b.textContent=filled?'✓ 入力済':'未入力';b.className='s-store-badge '+(filled?'badge-filled':'badge-empty');}
   var r=document.getElementById('row_'+key);if(r)r.classList.toggle('filled',filled);
   var m=document.getElementById('msg_'+key);
-  if(m){m.textContent='⏳ 送信待ち';m.className='s-save-msg';}
+  if(m){
+    if(qSaved){ m.textContent='⏳ 送信待ち'; m.className='s-save-msg'; }
+    else { m.textContent='❌ 保存できませんでした（容量不足）。値をメモして再入力してください'; m.className='s-save-msg err'; }
+  }
 
   updateQueueBadge();
 
-  // 4) 送信を試みる
-  flushShiireQueue();
+  // 4) 送信を試みる（保存成功時のみ。失敗時はキューに無いので送るものがない）
+  if(qSaved) flushShiireQueue();
+}
+
+function retryBtnHtml(row,domKey){
+  return ' <button onclick="retryShiire('+row+',\''+domKey+'\')" style="margin-left:8px;padding:3px 10px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer">🔄 再送信</button>';
+}
+
+// dead（要確認）になった行を、ユーザー操作で1回だけ再送信する
+async function retryShiire(row,domKey){
+  var qk=qKeyOf(shiireSheet,row);
+  var q=getShiireQueue();
+  var item=q[qk];
+  var m=document.getElementById('msg_'+domKey);
+  if(!item){ if(m){m.textContent='✓ 送信済み';m.className='s-save-msg ok';} updateQueueBadge(); return; }
+  // dead を解除し、あと1回だけ試す（失敗すれば再び dead になり、原因が表示される）
+  item.dead=false;
+  item.tries=Math.max(0,SHIIRE_MAX_TRIES-1);
+  setShiireQueue(q);
+  if(m){m.textContent='⏳ 再送信中…';m.className='s-save-msg';}
+  var r=await sendOneShiire(qk);
+  // 成功(ok)・恒久エラー(dead) のメッセージは sendOneShiire 側で更新済み
+  if(r==='net'&&m){ m.innerHTML='📴 通信できません（回線を確認）'+retryBtnHtml(row,domKey); m.className='s-save-msg err'; }
+  updateQueueBadge();
 }
 
 // 1件分を送信。戻り値: 'ok'（成功・削除済）/ 'server'（サーバ応答不正）/ 'net'（通信失敗）/ 'dead'（恒久エラー・要確認）
@@ -1957,6 +2059,7 @@ async function sendOneShiire(qk){
   if(!item) return 'ok';
   // すでに恒久エラー扱いのものは送信しない（無限リトライ防止）
   if(item.dead) return 'dead';
+  var sentVer=item.ver; // この送信が運んだ値のバージョン
   var ctrl=new AbortController();
   var to=setTimeout(function(){ctrl.abort();},20000);
   var res,json=null;
@@ -1974,26 +2077,37 @@ async function sendOneShiire(qk){
     try{ json=JSON.parse(txt); }catch(pe){ json=null; }
     if(json&&json.success){
       var cur=getShiireQueue();
-      delete cur[qk];
-      setShiireQueue(cur);
-      if(item.sheetName===shiireSheet){
-        var m=document.getElementById('msg_'+item.key);
-        if(m){m.textContent='✓ 保存しました';m.className='s-save-msg ok';}
+      // 送信中にユーザーが同じ欄を編集していた場合（ver が変わっている）、
+      // 古い送信の成功で新しい値を消さない（＝V2の消失を防ぐ）
+      if(cur[qk] && cur[qk].ver===sentVer){
+        delete cur[qk];
+        setShiireQueue(cur);
+        if(item.sheetName===shiireSheet){
+          var m=document.getElementById('msg_'+item.key);
+          if(m){m.textContent='✓ 保存しました';m.className='s-save-msg ok';}
+        }
+      }else{
+        // より新しい入力が残っている → もう一周して新しい値を送る
+        shiireFlushAgain=true;
       }
       return 'ok';
     }
-    // サーバ側エラー（データ不正・GASエラーページなど）→ 失敗回数を加算して残す
+    // ここに来た = success が false（サーバ側エラー/不正応答）
+    var serverErr=(json&&(json.error||json.message))?String(json.error||json.message):'';
     var cur2=getShiireQueue();
     var it2=cur2[qk];
+    // 送信中に新しい編集が入っていれば、この古い送信の失敗は無視して再送に任せる
+    if(it2 && it2.ver!==sentVer){ shiireFlushAgain=true; return 'ok'; }
     if(it2){
       it2.tries=(it2.tries||0)+1;
+      if(serverErr) it2.err=serverErr; // GASがエラー文を返したら保持（再送信時に表示）
       if(it2.tries>=SHIIRE_MAX_TRIES){
         // 諦める：恒久エラーとして印を付け、リトライ対象から外す
         it2.dead=true;
         setShiireQueue(cur2);
         if(item.sheetName===shiireSheet){
           var md=document.getElementById('msg_'+item.key);
-          if(md){md.textContent='❌ 保存できません（数値を確認して入力し直してください）';md.className='s-save-msg err';}
+          if(md){md.innerHTML=esc('❌ 保存できません: '+(it2.err||'数値を確認してください'))+retryBtnHtml(item.row,item.key);md.className='s-save-msg err';}
         }
         return 'dead';
       }
