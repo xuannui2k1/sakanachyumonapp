@@ -899,74 +899,57 @@ function applyGasEdits(orders) {
 
 // ══════════════════════════════════════════════════════════════
 // 在庫による自動キャンセル / 数量調整
-// 在庫管理（A列=商品名, B列=残数）を読み、商品名が完全一致する注文を
-// custCode 昇順で在庫を引き当てていく：
-//   ・在庫 ≥ 注文数量 → その注文をキャンセル（markDeleted）、在庫を減らす
-//   ・在庫 < 注文数量 だが在庫 > 0 → 注文数量を（注文数量−在庫）に減らして表示
-//     （アプリ表示のみ。元シートには書き込まない）
-//   ・在庫 = 0 → 以降の注文はそのまま
+// ----------------------------------------------------------------
+// 【変更】引き当て計算はサーバー(GAS)で1回だけ行う。各端末は結果を
+//   読むだけにして、端末ごとの注文表示範囲の違いによるズレ・在庫の
+//   二重引き当てを防ぐ。クライアントは markDeleted を書き込まない。
+//
+// サーバー(getStockAllocation)が返すもの：
+//   cancel : [ fp, ... ]                 全量キャンセルすべき注文
+//   adjust : [ { fp, from, to }, ... ]   数量を減らすべき注文
+//
+// ここでは結果を以下に反映するだけ：
+//   ・cancel の fp → ローカルの gas_deleted に入れて「キャンセル表示」
+//     （※サーバーの del_ プロパティには書かない。表示専用）
+//   ・adjust の fp → stockAdjusted に入れ、todayOrders の数量も書き換え
+//
+// fp はサーバー・クライアントで同一定義（orderFingerprint）。partner は
+// 自分の商品グループの注文しか表示しないが、他グループの fp が来ても
+// 画面上の注文に一致しないだけで無害。
 // ══════════════════════════════════════════════════════════════
 function autoCancelByStock() {
-  return fetch(gasUrl + '?action=getStock')
+  return fetch(gasUrl + '?action=getStockAllocation')
     .then(function(r){ return r.json(); })
     .then(function(js){
-      if (!js || !js.success || !js.stock) return;
+      stockAdjusted = {};  // 毎回リセット（サーバーが毎回まっさら再計算するため）
+      if (!js || !js.success) return;  // 失敗時は通常表示（キャンセルも調整もしない）
 
-      // 商品名 → 在庫数（完全一致）
-      var stockMap = {};
-      js.stock.forEach(function(s){
-        var nm = String(s.name || '').trim();
-        if (nm) stockMap[nm] = parseFloat(s.qty) || 0;
+      // 1) キャンセル対象の fp を集合化
+      var cancelSet = {};
+      (js.cancel || []).forEach(function(fp){ cancelSet[fp] = true; });
+
+      // 2) ローカルの「キャンセル表示」リストを、サーバー結果で“置き換える”。
+      //    旧仕様の cumulative（積み上げ）と違い、毎回サーバーの最新計算で
+      //    上書きするので、在庫が戻れば自動でキャンセルも解除される。
+      //    ※ サーバー側 del_ プロパティへは書き込まない（表示専用）。
+      store('set','gas_deleted_'+todayKey(), JSON.stringify(cancelSet));
+
+      // 3) 数量調整を適用（表示用 + todayOrders の qty も書き換え）
+      var adjMap = {};
+      (js.adjust || []).forEach(function(a){
+        if (!a || !a.fp) return;
+        adjMap[a.fp] = a;
+        stockAdjusted[a.fp] = { from: a.from, to: a.to };
       });
-
-      // 在庫がある商品名ごとに、対象注文を custCode 昇順で集める
-      var byName = {};
-      todayOrders.forEach(function(o, i){
-        var nm = String(o.itemName || '').trim();
-        if (!(nm in stockMap)) return;
-        if (!byName[nm]) byName[nm] = [];
-        byName[nm].push({ o: o, i: i });
+      todayOrders.forEach(function(o){
+        var a = adjMap[orderFingerprint(o)];
+        if (a) o.qty = a.to;
       });
-
-      var deleted = getGasDeleted();
-      var ds = todayKey().replace('snap_','');
-      var pending = [];
-      var changed = false;
-      stockAdjusted = {};  // 数量調整された注文（fingerprint → {from,to}）をリセット
-
-      Object.keys(byName).forEach(function(nm){
-        var remain = stockMap[nm];
-        var list = byName[nm].sort(function(a, b){
-          return (parseFloat(a.o.custCode) || 0) - (parseFloat(b.o.custCode) || 0);
-        });
-        list.forEach(function(entry){
-          var o = entry.o;
-          if (remain <= 0) return;                       // 在庫切れ → そのまま
-          var orderQty = parseFloat(o.qty) || 0;
-          if (orderQty <= 0) return;
-          if (remain >= orderQty) {
-            // 全量在庫あり → キャンセル
-            remain -= orderQty;
-            var fp = orderFingerprint(o);                // 元の数量で fingerprint
-            if (!deleted[fp]) {
-              deleted[fp] = true;
-              changed = true;
-              enqueueAdmin('markDeleted', { fp:fp }, 'del|'+fp);
-            }
-          } else {
-            // 一部だけ在庫あり → 注文数量を不足分に減らす（表示のみ）
-            var origQty = orderQty;
-            o.qty = orderQty - remain;
-            stockAdjusted[orderFingerprint(o)] = { from: origQty, to: o.qty };
-            remain = 0;
-          }
-        });
-      });
-
-      if (changed) store('set','gas_deleted_'+todayKey(), JSON.stringify(deleted));
-      return Promise.all(pending);
     })
-    .catch(function(){ /* 在庫取得失敗時は何もしない（通常通り表示） */ });
+    .catch(function(){
+      stockAdjusted = {};
+      /* 在庫取得失敗時は何もしない（通常通り表示） */
+    });
 }
 
 // ══════════════════════════════════════════════════════════════
