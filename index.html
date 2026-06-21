@@ -838,8 +838,13 @@ function loadOrdersData() {
     store('set','gas_edits_'+todayKey(), JSON.stringify(gasEdits));
 
     // Store deleted fingerprints (from GAS, shared across all devices)
+    // ★ これはサーバーの del_ = 管理者が手で削除した注文。manual_deleted に保存する。
+    //   （在庫由来のキャンセルは autoCancelByStock が別途 gas_deleted に合算する）
     var deletedFps = {};
     (delJson.deleted || []).forEach(function(fp){ deletedFps[fp] = true; });
+    store('set','manual_deleted_'+todayKey(), JSON.stringify(deletedFps));
+    // gas_deleted は autoCancelByStock 完了時に「手動削除＋在庫キャンセル」で再構築される。
+    // 描画までの空白を避けるため、ひとまず手動削除分で初期化しておく。
     store('set','gas_deleted_'+todayKey(), JSON.stringify(deletedFps));
 
     var freshOrders = json.orders || [];
@@ -854,6 +859,19 @@ function loadOrdersData() {
     document.getElementById('app-screen').style.display   = 'flex';
 
     var syncDateStr = json.syncDate || '';
+    // 再読込が完了したので「更新あり」状態を解除し、バーを隠す
+    updateAvailable = false;
+    hideUpdateBar();
+    // 読込完了時点を「既読」基準にする：管理者タッチの基準を現在のサーバ値に合わせる。
+    // （この時点で最新を取得済みなので、ここまでの変更はバナー対象にしない）
+    (function(){
+      var code = isAdmin ? 'all' : loginCode;
+      fetch(gasUrl + '?action=getAdminStamp&code=' + encodeURIComponent(code))
+        .then(function(r){ return r.json(); })
+        .then(function(js){
+          if (js && js.success) store('set', 'last_astamp_' + loginCode, String(js.stamp || ''));
+        }).catch(function(){});
+    })();
     // 在庫がある注文を自動キャンセル → 完了後に描画
     autoCancelByStock().then(function(){
       if (isAdmin) {
@@ -862,6 +880,7 @@ function loadOrdersData() {
       } else {
         renderPartner(syncDateStr);
       }
+      startSyncPolling();   // 初回読込後にポーリング開始（以後は内部で二重起動防止）
     });
   })
   .catch(function(e){
@@ -873,6 +892,19 @@ function loadOrdersData() {
 
 function getGasDeleted() {
   return JSON.parse(store('get','gas_deleted_'+todayKey()) || '{}');
+}
+
+// ★ 管理者が手で削除した注文だけを別管理する（在庫キャンセルとは別レイヤー）。
+//   gas_deleted は「画面に出さない注文すべて（手動削除＋在庫キャンセル）」の
+//   合算結果。一方こちらは「管理者が手で消した注文」だけ。在庫計算が
+//   何度走っても、この集合は必ず gas_deleted に上乗せされ消えない。
+function getManualDeleted() {
+  return JSON.parse(store('get','manual_deleted_'+todayKey()) || '{}');
+}
+function setManualDeleted(fp, val) {
+  var d = getManualDeleted();
+  if (val) d[fp] = true; else delete d[fp];
+  store('set','manual_deleted_'+todayKey(), JSON.stringify(d));
 }
 
 function getGasEdits() {
@@ -922,22 +954,53 @@ function autoCancelByStock() {
     .then(function(r){ return r.json(); })
     .then(function(js){
       stockAdjusted = {};  // 毎回リセット（サーバーが毎回まっさら再計算するため）
-      if (!js || !js.success) return;  // 失敗時は通常表示（キャンセルも調整もしない）
 
-      // 1) キャンセル対象の fp を集合化
+      // ★【最優先】管理者が手で消した注文（manual_deleted）は常に保持する。
+      //   在庫計算が失敗しても・成功しても、この集合は必ずキャンセル表示に残す。
+      //   「管理者の決定が常に勝つ。在庫は譲る」
+      var manualDel = getManualDeleted();  // { fp:true }（管理者が手で削除した注文）
+
+      if (!js || !js.success) {
+        // 在庫取得に失敗 → 在庫キャンセルは行わないが、管理者の手動削除は維持する
+        store('set','gas_deleted_'+todayKey(), JSON.stringify(manualDel));
+        return;
+      }
+
+      // ★ 管理者が「数量を編集した」注文の editKey 集合。
+      //   在庫はこれらの注文に一切触れない（キャンセルも数量調整もしない）。
+      var editedKeys = {};
+      var ge = getGasEdits();
+      Object.keys(ge).forEach(function(k){ editedKeys[k] = true; });
+
+      // editKey(custCode|itemCode|itemName) → そのグループの fp を引けるよう対応表を作る
+      //   サーバーが返す fp は元の数量で作られている（orderFingerprint と一致）。
+      var fpToEditKey = {};
+      todayOrders.forEach(function(o){
+        fpToEditKey[orderFingerprint(o)] = orderEditKey(o);
+      });
+      function isAdminTouched(fp){
+        // 管理者が編集 or 手動削除した注文か？ → 在庫は触らない
+        if (manualDel[fp]) return true;
+        var ek = fpToEditKey[fp];
+        return !!(ek && editedKeys[ek]);
+      }
+
+      // 1) キャンセル対象の fp を集合化（管理者が触った注文は除外）
       var cancelSet = {};
-      (js.cancel || []).forEach(function(fp){ cancelSet[fp] = true; });
+      (js.cancel || []).forEach(function(fp){
+        if (!isAdminTouched(fp)) cancelSet[fp] = true;
+      });
 
-      // 2) ローカルの「キャンセル表示」リストを、サーバー結果で“置き換える”。
-      //    旧仕様の cumulative（積み上げ）と違い、毎回サーバーの最新計算で
-      //    上書きするので、在庫が戻れば自動でキャンセルも解除される。
-      //    ※ サーバー側 del_ プロパティへは書き込まない（表示専用）。
+      // 2) 管理者の手動削除を必ず上乗せ（在庫結果を“置き換える”のではなく“合算”）。
+      //    在庫が戻れば在庫由来のキャンセルは消えるが、手動削除は残り続ける。
+      Object.keys(manualDel).forEach(function(fp){ cancelSet[fp] = true; });
       store('set','gas_deleted_'+todayKey(), JSON.stringify(cancelSet));
 
-      // 3) 数量調整を適用（表示用 + todayOrders の qty も書き換え）
+      // 3) 数量調整を適用（管理者が触った注文は除外。表示用 + todayOrders の qty も書き換え）
       var adjMap = {};
       (js.adjust || []).forEach(function(a){
         if (!a || !a.fp) return;
+        if (isAdminTouched(a.fp)) return;   // ★ 管理者編集済みは在庫調整しない
         adjMap[a.fp] = a;
         stockAdjusted[a.fp] = { from: a.from, to: a.to };
       });
@@ -948,7 +1011,8 @@ function autoCancelByStock() {
     })
     .catch(function(){
       stockAdjusted = {};
-      /* 在庫取得失敗時は何もしない（通常通り表示） */
+      // 通信失敗でも管理者の手動削除は維持
+      store('set','gas_deleted_'+todayKey(), JSON.stringify(getManualDeleted()));
     });
 }
 
@@ -1094,6 +1158,125 @@ function renderNewBanner(elId, isAdmin) {
 function dismissBanner(elId) {
   document.getElementById(elId).style.display = 'none';
   newOrderKeys = {}; // xóa in-memory, không hiện lại cho đến khi có đơn mới thật
+}
+
+// ══════════════════════════════════════════════════════════════
+// 軽量ポーリング — 1分ごとに「注文が更新されたか」だけ確認する
+// ----------------------------------------------------------------
+// ・getSyncDate（H列の最終値だけ読む軽量API）を叩き、保存済み last_sync と比較。
+// ・変化なし → 画面を一切触らない（チラつき・スクロール飛びゼロ）。
+// ・変化あり → 自動で再描画せず、上部に「🔔 更新あり — タップで反映」バーを出す。
+//   ユーザーが自分のタイミングでタップしたときだけ loadOrdersData を実行する（🅰️方式）。
+// ・タブが非表示／入力中（INPUT/TEXTAREA フォーカス中）はスキップして邪魔しない。
+// ・partner / admin の注文タブでのみ動作（仕入タブ表示中は注文の更新確認をしない）。
+// ══════════════════════════════════════════════════════════════
+var POLL_INTERVAL_MS = 60000;   // 1分
+var pollTimer = null;
+var pollInFlight = false;
+var updateAvailable = false;     // 「更新あり」検知済みフラグ（重複バナー抑止）
+
+function isTypingNow() {
+  var a = document.activeElement;
+  if (!a) return false;
+  var tag = (a.tagName || '').toUpperCase();
+  return tag === 'INPUT' || tag === 'TEXTAREA';
+}
+
+// 注文タブを今見ているか？（admin は仕入タブ表示中は対象外）
+function onOrdersTabNow() {
+  if (!loginCode) return false;
+  if (isAdmin && adminCurrentTab === 'shiire') return false;  // 仕入タブ中はスキップ
+  return true;
+}
+
+function startSyncPolling() {
+  if (pollTimer) return;          // 二重起動防止
+  pollTimer = setInterval(checkForUpdates, POLL_INTERVAL_MS);
+}
+
+function checkForUpdates() {
+  // ログイン前 / タブ非表示 / 入力中 / 注文タブ以外 / 既に検知済み → 何もしない
+  if (!loginCode) return;
+  if (document.hidden) return;
+  if (isTypingNow()) return;
+  if (!onOrdersTabNow()) return;
+  if (updateAvailable) return;
+  if (pollInFlight) return;
+  if (!navigator.onLine) return;
+
+  pollInFlight = true;
+  var code = isAdmin ? 'all' : loginCode;
+  // 2つの軽量チェックを並行： ① 注文の syncDate（新着注文）、② 管理者タッチ（自分グループ）
+  Promise.all([
+    fetch(gasUrl + '?action=getSyncDate')
+      .then(function(r){ return r.json(); }).catch(function(){ return null; }),
+    fetch(gasUrl + '?action=getAdminStamp&code=' + encodeURIComponent(code))
+      .then(function(r){ return r.json(); }).catch(function(){ return null; })
+  ]).then(function(res){
+    pollInFlight = false;
+    var syncJs  = res[0];
+    var stampJs = res[1];
+    var changed = false;
+
+    // ① 新着注文の検出
+    if (syncJs && syncJs.success) {
+      var latest = String(syncJs.syncDate || '');
+      if (latest) {
+        var known = store('get', 'last_sync_' + loginCode) || '';
+        if (!known) { store('set', 'last_sync_' + loginCode, latest); }  // 初回は基準合わせのみ
+        else if (latest !== known) { changed = true; }
+      }
+    }
+
+    // ② 管理者が自分グループの注文を編集／削除／コメントしたか
+    if (stampJs && stampJs.success) {
+      var stamp = String(stampJs.stamp || '');
+      if (stamp) {
+        var knownStamp = store('get', 'last_astamp_' + loginCode) || '';
+        if (!knownStamp) { store('set', 'last_astamp_' + loginCode, stamp); }  // 初回は基準合わせのみ
+        else if (stamp !== knownStamp) { changed = true; }
+      }
+    }
+
+    if (changed) {
+      updateAvailable = true;
+      showUpdateBar();
+    }
+  }).catch(function(){ pollInFlight = false; });
+}
+
+// 上部の「タップで反映」バーを表示
+function showUpdateBar() {
+  var el = document.getElementById('update-bar');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'update-bar';
+    el.style.cssText =
+      'position:fixed;left:50%;top:12px;transform:translateX(-50%);' +
+      'max-width:92%;display:flex;align-items:center;gap:10px;cursor:pointer;' +
+      'background:linear-gradient(135deg,#0ea5e9,#1e4d7b);color:#fff;' +
+      'border-radius:24px;padding:10px 18px;white-space:nowrap;' +
+      'box-shadow:0 6px 24px rgba(14,165,233,0.45);z-index:950;' +
+      'font-size:13px;font-weight:700;animation:slideDown .3s ease';
+    el.innerHTML =
+      '<span style="font-size:16px">🔔</span>' +
+      '<span>新しい更新があります — タップで反映</span>';
+    el.onclick = applyUpdateNow;
+    document.body.appendChild(el);
+  }
+  el.style.display = 'flex';
+}
+
+function hideUpdateBar() {
+  var el = document.getElementById('update-bar');
+  if (el) el.style.display = 'none';
+}
+
+// ユーザーがバーをタップ → 実際に再読込（既読基準の更新は loadOrdersData 側で行う）
+function applyUpdateNow() {
+  updateAvailable = false;
+  hideUpdateBar();
+  loadOrdersData();
 }
 
 function getShortName(custCode) {
@@ -1602,7 +1785,8 @@ function deleteAdminRow(key){
     if(orderKey(j,todayOrders[j])===key){
       var fp=orderFingerprint(todayOrders[j]);
       enqueueAdmin('markDeleted', { fp:fp }, 'del|'+fp);
-      var d=getGasDeleted(); d[fp]=true;
+      setManualDeleted(fp, true);          // ★ 手動削除レイヤーに記録（在庫に消されない）
+      var d=getGasDeleted(); d[fp]=true;   // 即時の画面反映用
       store('set','gas_deleted_'+todayKey(), JSON.stringify(d));
       break;
     }
@@ -1620,7 +1804,8 @@ function restoreAdminRow(key){
     if(orderKey(j,todayOrders[j])===key){
       var fp=orderFingerprint(todayOrders[j]);
       enqueueAdmin('unmarkDeleted', { fp:fp }, 'del|'+fp);
-      var d=getGasDeleted(); delete d[fp];
+      setManualDeleted(fp, false);         // ★ 手動削除レイヤーから除去
+      var d=getGasDeleted(); delete d[fp]; // 即時の画面反映用
       store('set','gas_deleted_'+todayKey(), JSON.stringify(d));
       break;
     }
@@ -2447,6 +2632,13 @@ async function flushAdminQueue(){
 // 自動リトライ：15秒ごと＋オンライン復帰時（仕入と共通の online/offline ハンドラに相乗り）
 setInterval(function(){ flushAdminQueue(); }, 15000);
 window.addEventListener('online', function(){ flushAdminQueue(); });
+
+// アプリが再び前面に来たら（タブ復帰）すぐ更新確認する（1分待たない）
+document.addEventListener('visibilitychange', function(){
+  if (!document.hidden) {
+    try { checkForUpdates(); } catch(_){}
+  }
+});
 
 // ══════════════════════════════════════════════════════════════
 // HELPERS
