@@ -2276,6 +2276,11 @@ function doSSave(fn,idx,key,doSend){
   var hv=hEl.value||'';
   var iv=iEl.value||'';
 
+  // ★ユーザーが実際に触った列だけ送る。触っていない列はキーごと省略し、
+  //   GAS側で「キー無し=そのセルは触らない」とする。
+  //   こうしないと、H列だけ入力した時に i:'' が送られ、I列の数式が消える。
+  var origF=(fEl.defaultValue||''), origH=(hEl.defaultValue||''), origI=(iEl.defaultValue||'');
+
   // 1) ローカル即時反映（画面が再描画・リロードされても消えない）
   s.qty=fv; s.price=hv; s.shiirePrice=iv;
 
@@ -2283,12 +2288,20 @@ function doSSave(fn,idx,key,doSend){
   // ★空欄は null ではなく '' を送る。GAS側で「''=セルをクリア」「キー無し=触らない」
   //   と区別するため。3列(F/H/I)はそれぞれ独立してクリアできる。
   var q=getShiireQueue();
-  q[qKeyOf(shiireSheet,s.row)]={
+  var existing=q[qKeyOf(shiireSheet,s.row)]||{};
+  var payload={
     sheetName:shiireSheet, row:s.row,
-    f:fv, h:hv, i:iv,
     fn:fn, idx:idx, key:key, ts:Date.now(),
     ver:(Date.now()+'_'+(++shiireSeq)) // 上書き検出用の一意トークン
   };
+  // 既にキューにある変更（前回の保存分）は維持しつつ、今回変わった列を加える
+  if('f' in existing) payload.f=existing.f;
+  if('h' in existing) payload.h=existing.h;
+  if('i' in existing) payload.i=existing.i;
+  if(fv!==origF) payload.f=fv;
+  if(hv!==origH) payload.h=hv;
+  if(iv!==origI) payload.i=iv;
+  q[qKeyOf(shiireSheet,s.row)]=payload;
   var qSaved=setShiireQueue(q);
   // 保存できた時だけ「未保存」を解除。失敗時は未保存のままにして再読込時に警告する
   if(qSaved) delete shiireDirtyKeys[key]; else shiireDirtyKeys[key]=1;
