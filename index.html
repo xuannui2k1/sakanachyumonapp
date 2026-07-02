@@ -2053,6 +2053,7 @@ function renderShiireList(){
       var fn2=inp.getAttribute('data-fn');
       var idx2=parseInt(inp.getAttribute('data-idx'));
       var key2=inp.id.replace('f_','');
+      inp.defaultValue='';
       schSave(fn2,idx2,key2);
     });
   },100);
