@@ -1528,16 +1528,43 @@ function renderAdmin(syncDate) {
   // Build category tabs
   var groupSet = {};
   todayOrders.forEach(function(o){ if(o.itemCode) groupSet[String(o.itemCode)]=true; });
-  var groups = Object.keys(groupSet).map(Number).filter(Boolean).sort(function(a,b){return a-b;});
+
+  // ★ 表示順：102, 105, 104, 103, 101 を優先、残りは昇順
+  var PRIORITY_ORDER = [102, 105, 104, 103, 101];
+  var groups = Object.keys(groupSet).map(Number).filter(Boolean).sort(function(a,b){
+    var ia = PRIORITY_ORDER.indexOf(a);
+    var ib = PRIORITY_ORDER.indexOf(b);
+    if (ia !== -1 && ib !== -1) return ia - ib;      // 両方優先 → 優先順
+    if (ia !== -1) return -1;                         // a のみ優先 → a が先
+    if (ib !== -1) return 1;                          // b のみ優先 → b が先
+    return a - b;                                     // どちらも優先外 → 昇順
+  });
 
   var tabBar = document.getElementById('admin-tab-bar');
-  tabBar.innerHTML = groups.map(function(c){
-    var lbl = CODE_LABELS[c]||'コード'+c;
-    var isFirst = (c === groups[0]);
-    return '<button class="tab-item'+(isFirst?' active':'')+'" data-code="'+c+'" onclick="selectAdminGroup(\''+c+'\')">'+lbl+'</button>';
-  }).join('');
 
-  currentGroup = groups[0];
+  // ★ 現在選択中のグループがまだ存在するなら維持、なければ先頭
+  var stillExists = currentGroup && groups.indexOf(Number(currentGroup)) !== -1;
+  if (!stillExists) currentGroup = groups[0];
+
+  // ★ グループ構成が変わった時だけ innerHTML を再生成（スクロール位置と選択が飛ばないように）
+  var newSig = groups.join(',');
+  var oldSig = tabBar.getAttribute('data-sig') || '';
+  if (newSig !== oldSig) {
+    var savedScroll = tabBar.scrollLeft;
+    tabBar.innerHTML = groups.map(function(c){
+      var isActive = (String(c) === String(currentGroup));
+      var lbl = CODE_LABELS[c]||'コード'+c;
+      return '<button class="tab-item'+(isActive?' active':'')+'" data-code="'+c+'" onclick="selectAdminGroup(\''+c+'\')">'+lbl+'</button>';
+    }).join('');
+    tabBar.setAttribute('data-sig', newSig);
+    tabBar.scrollLeft = savedScroll;
+  } else {
+    // 構成同じ → active クラスだけ更新
+    tabBar.querySelectorAll('.tab-item').forEach(function(b){
+      b.classList.toggle('active', String(b.dataset.code) === String(currentGroup));
+    });
+  }
+
   renderAdminCmtBanner();
   renderAdminList();
 }
