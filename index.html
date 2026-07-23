@@ -110,6 +110,7 @@ body{font-family:-apple-system,'Hiragino Sans','Yu Gothic UI','Meiryo',sans-seri
   cursor:pointer;transition:all .2s;position:relative
 }
 .tab-item.active{color:var(--navy);border-bottom-color:var(--navy)}
+#admin-tab-bar .tab-item{flex:0 0 auto;padding:14px 18px;white-space:nowrap}
 .tab-badge{
   position:absolute;top:8px;right:12px;
   background:var(--amber);color:white;
@@ -1601,9 +1602,16 @@ function toggleAdminCmtBanner() {
 
 function selectAdminGroup(code) {
   currentGroup = code;
+  var activeBtn = null;
   document.querySelectorAll('#admin-tab-bar .tab-item').forEach(function(b){
-    b.classList.toggle('active', String(b.dataset.code)===String(code));
+    var isActive = String(b.dataset.code)===String(code);
+    b.classList.toggle('active', isActive);
+    if (isActive) activeBtn = b;
   });
+  // ★ 選択したタブを可視範囲内に保つ（先頭に飛ばない）
+  if (activeBtn && activeBtn.scrollIntoView) {
+    activeBtn.scrollIntoView({behavior:'smooth', block:'nearest', inline:'nearest'});
+  }
   renderAdminCmtBanner();
   renderAdminList();
 }
