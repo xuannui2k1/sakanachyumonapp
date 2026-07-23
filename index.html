@@ -1868,8 +1868,25 @@ function initShiireTab(){
 }
 
 function selectShiirePrefix(prefix){
+  // ★ 再描画前に現在のスクロール位置を記憶（先頭に飛ばないように）
+  var strip = document.getElementById('shiire-tab-strip');
+  var savedScroll = strip ? strip.scrollLeft : 0;
   shiireCurrentPrefix = prefix;
   renderShiireList();
+  // ★ 再描画後にスクロール位置を復元 + 選択タブが見えるように調整
+  setTimeout(function(){
+    var strip2 = document.getElementById('shiire-tab-strip');
+    if (strip2) {
+      strip2.scrollLeft = savedScroll;
+      var activeBtn = null;
+      strip2.querySelectorAll('button').forEach(function(b){
+        if (b.style.background.indexOf('navy') !== -1 || b.style.color.indexOf('white') !== -1) activeBtn = b;
+      });
+      if (activeBtn && activeBtn.scrollIntoView) {
+        activeBtn.scrollIntoView({behavior:'smooth', block:'nearest', inline:'nearest'});
+      }
+    }
+  }, 0);
 }
 
 function reloadShiire(){ shiireLoaded=false; shiireCurrentPrefix=null; initShiireTab(); }
@@ -2030,12 +2047,26 @@ function renderShiireList(){
   var prefixes = Object.keys(CODE_TO_PREFIX).map(function(c){return CODE_TO_PREFIX[c];})
     .filter(function(p){return prefixSet[p];});
 
+  // ★ 表示順：102(中山), 105(若), 104(貴水), 103(えびす), 101(丸久) を優先、残りは元の順
+  var SHIIRE_PRIORITY_PREFIXES = [
+    CODE_TO_PREFIX[102], CODE_TO_PREFIX[105], CODE_TO_PREFIX[104],
+    CODE_TO_PREFIX[103], CODE_TO_PREFIX[101]
+  ];
+  prefixes.sort(function(a,b){
+    var ia = SHIIRE_PRIORITY_PREFIXES.indexOf(a);
+    var ib = SHIIRE_PRIORITY_PREFIXES.indexOf(b);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return 0;
+  });
+
   // Tab bar (admin only or partner with multiple groups)
   var showTabs = isAdmin && prefixes.length > 1;
   var tabBarHtml = '';
   if(showTabs){
     if(!shiireCurrentPrefix) shiireCurrentPrefix = prefixes[0];
-    tabBarHtml = '<div style="display:flex;overflow-x:auto;gap:4px;padding:0 0 12px;scrollbar-width:none">'+
+    tabBarHtml = '<div id="shiire-tab-strip" style="display:flex;overflow-x:auto;gap:4px;padding:0 0 12px;scrollbar-width:none">'+
       prefixes.map(function(p){
         var lbl = Object.keys(CODE_TO_PREFIX).reduce(function(acc,c){
           return CODE_TO_PREFIX[c]===p ? CODE_LABELS[Number(c)]||p : acc;
