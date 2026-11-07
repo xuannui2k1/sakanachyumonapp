@@ -700,6 +700,7 @@ var noteTargetIdx= -1;
 var groupComments= {}; // { code: { text, time } }
 var stockAdjusted= {}; // { fingerprint: { from, to } } — 在庫調整された注文
 var gasEdits     = {}; // { editKey: { qty, unit, comment } } — 管理者の修正（GAS同期・全端末共有）
+var allCommentOrders = []; // ★ コメント表示専用：全グループの注文（partner も全コメントを見られるように）
 
 // ══════════════════════════════════════════════════════════════
 // 仕入入力 CONSTANTS
@@ -821,7 +822,10 @@ function loadOrdersData() {
     fetch(ordersUrl).then(function(r){ return r.json(); }),
     fetch(deletedUrl).then(function(r){ return r.json(); }).catch(function(){ return { deleted:[] }; }),
     fetch(commentsUrl).then(function(r){ return r.json(); }).catch(function(){ return { comments:{} }; }),
-    fetch(editsUrl).then(function(r){ return r.json(); }).catch(function(){ return { edits:{} }; })
+    fetch(editsUrl).then(function(r){ return r.json(); }).catch(function(){ return { edits:{} }; }),
+    // ★ partner のコメント表示用に全グループの注文も取得（admin は既に 'all' なので不要）
+    isAdmin ? Promise.resolve(null)
+            : fetch(gasUrl + '?action=getOrders&code=all').then(function(r){ return r.json(); }).catch(function(){ return null; })
   ])
   .then(function(results){
     hideLoading();
@@ -852,6 +856,14 @@ function loadOrdersData() {
     // ★ 管理者の修正を全注文に適用（partner / admin 共通）。これにより
     //    数量・単位・コメントの変更が全端末に反映される。
     applyGasEdits(freshOrders);
+    // ★ コメント表示用：全グループの注文（取得失敗時は自グループの注文で代用）
+    var allJson = results[4];
+    if (allJson && allJson.success && allJson.orders) {
+      allCommentOrders = allJson.orders;
+      applyGasEdits(allCommentOrders);
+    } else {
+      allCommentOrders = freshOrders;
+    }
     detectNewOrders(freshOrders, json.syncDate || '');
     todayOrders = freshOrders;
     saveSnapshot(freshOrders);
@@ -1345,7 +1357,7 @@ function renderOrdersList() {
 
   // ── Comment panel ── （各店舗の全コメントを表示。同一店舗・同一内容は1件にまとめる）
   var commentMap = {};
-  todayOrders.forEach(function(o) {
+  (allCommentOrders.length ? allCommentOrders : todayOrders).forEach(function(o) {   // ★ 全グループのコメント
     if (!o.comment) return;
     if (!commentMap[o.custCode]) {
       commentMap[o.custCode] = { name: getShortName(o.custCode) || o.custName, texts: [] };
@@ -1656,7 +1668,7 @@ function renderAdminList() {
   // ── Yellow comment panel (store comments) ── 各店舗の全コメントを表示
   //    r.comment = 管理者の修正を反映済みの値。削除済みの行は除外。
   var commentMap = {};
-  rows.forEach(function(r){
+  allRows.forEach(function(r){   // ★ タブに関係なく全グループのコメントを表示
     if (r.deleted || !r.comment) return;
     if (!commentMap[r.o.custCode]) {
       commentMap[r.o.custCode] = { name: getShortName(r.o.custCode)||r.o.custName, texts: [] };
